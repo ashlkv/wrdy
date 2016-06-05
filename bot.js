@@ -12,8 +12,8 @@ let _ = require('lodash');
 const useWebhook = Boolean(process.env.USE_WEBHOOK);
 
 // TODO Differentiate between answers and commands. Use buttons for commands.
-const anotherWordPattern = /^слово$|^ещ(е|ё)$|^дальше$|^\/start/i;
-const skipPattern = /перевод|не знаю|^\?/i;
+const anotherWordPattern = /^слово$|^\/start/i;
+const skipPattern = /перевод|не знаю|дальше|не помню|^ещ(е|ё)$^\?/i;
 const yesPattern = /^да$|^ага$|^ок$|^ладно$|^хорошо$|^давай$/i;
 const noPattern = /^нет$/i;
 
