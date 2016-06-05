@@ -1,0 +1,33 @@
+{
+  "name": "wrdy",
+  "version": "0.0.1",
+  "description": "A Telegram bot for memorizing English vocabulary",
+  "main": "app.js",
+  "private": "true",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashyashy/wrdy.git"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "vocabulary"
+  ],
+  "author": "Anna Shishlyakova",
+  "bugs": {
+    "url": "https://github.com/ashyashy/wrdy/issues"
+  },
+  "engines": {
+    "node": "5.0.0"
+  },
+  "dependencies": {
+    "bluebird": "^3.4.0",
+    "botanio": "0.0.6",
+    "debug": "^2.2.0",
+    "dotenv": "^2.0.0",
+    "lodash": "^4.13.1",
+    "moment": "^2.13.0",
+    "mongodb": "^2.1.21",
+    "node-telegram-bot-api": "^0.21.1"
+  }
+}
