@@ -20,9 +20,9 @@ const status = {
  */
 const add = function(word, status, chatId) {
     return Storage.insert(Storage.collectionName.score, {
-        term: word.getTerm(),
-        translation: word.getTranslation(),
-        clue: word.getClue(),
+        term: word && word.getTerm(),
+        translation: word && word.getTranslation(),
+        clue: word && word.getClue(),
         date: moment().toDate(),
         status: status,
         chatId: chatId

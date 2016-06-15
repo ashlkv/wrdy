@@ -61,9 +61,9 @@ Word.prototype.getTerm = function() {
 Word.prototype.getClue = function() {
     let randomIndex = _.random(0, this.term.length - 1);
     let randomLetter = this.term[randomIndex];
-    let dots = this.term.replace(/[a-z]/gi, '⋅').split('');
+    let dots = this.term.replace(/[a-z]/gi, '–').split('');
     dots[randomIndex] = randomLetter;
-    return dots.join('');
+    return dots.join(' ');
 };
 
 const NoTermsException = function() {};
@@ -113,40 +113,6 @@ const getRandomTerm = function(chatId) {
 };
 
 /**
- * Stores last term for given chat
- * @param {Word} word
- * @param {Number} chatId
- * @returns {Promise}
- */
-const saveCurrentWord = function(word, chatId) {
-    return Storage
-        .remove(Storage.collectionName.currentWord, {chatId: chatId})
-        .then(function() {
-            return Storage.insert(Storage.collectionName.currentWord, {
-                term: word.getTerm(),
-                date: moment().toDate(),
-                chatId: chatId
-            });
-        });
-};
-
-/**
- * Returns current word for given chat
- * @param {Number} chatId
- * @returns {Promise}
- */
-const getCurrentWord = function(chatId) {
-    return Storage
-            .find(Storage.collectionName.currentWord, {chatId: chatId})
-            .then(function(entries) {
-                let word = entries.length ? new Word(entries[0].term) : null;
-                // TODO There may be no translation for the term
-                // If there is a word with translation, return the word. Otherwise, nothing.
-                return word && word.getTranslation() ? word : null;
-            });
-};
-
-/**
  * Translates term
  * @param {String} term
  * @returns {String}
@@ -155,10 +121,46 @@ const translate = function(term) {
     return getPairs()[term];
 };
 
+/**
+ * Stores last state, word, message and whatever for each chat
+ * @param {Object} data
+ * @param {Number} chatId
+ * @returns {Promise}
+ */
+const saveHistory = function(data, chatId) {
+    return Storage
+        .remove(Storage.collectionName.history, {chatId: chatId})
+        .then(function() {
+            return Storage.insert(Storage.collectionName.history, {
+                data: data,
+                date: moment().toDate(),
+                chatId: chatId
+            });
+        });
+};
+
+/**
+ * Retrieves last state, word and message for each chat
+ * @param {Number} chatId
+ * @returns {Promise}
+ */
+const getHistory = function(chatId) {
+    return Storage
+        .find(Storage.collectionName.history, {chatId: chatId})
+        .then(function(entries) {
+            let data = entries.length ? entries[0].data : {};
+            // Hydrating the word object
+            if (data.word && data.word.term) {
+                data.word = new Word(data.word.term);
+            }
+            return data;
+        });
+};
+
 module.exports = {
     Word: Word,
     getRandomTerm: getRandomTerm,
-    saveCurrentWord: saveCurrentWord,
-    getCurrentWord: getCurrentWord,
+    saveHistory: saveHistory,
+    getHistory: getHistory,
     NoTermsException: NoTermsException
 };

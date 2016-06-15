@@ -7,13 +7,14 @@ var connection;
 
 const collectionName = {
     score: 'score',
-    currentWord: 'currentWord'
+    currentWord: 'currentWord',
+    history: 'history'
 };
 
 /**
  * @returns {Promise}
  */
-var connect = function() {
+const connect = function() {
     // If connection already exists, use existing connection.
     // It is recommended to only connect once and reuse that one connection: http://stackoverflow.com/questions/10656574
     let promise;
@@ -31,33 +32,33 @@ var connect = function() {
     return promise;
 };
 
-var insert = function(collectionName, items) {
+const insert = function(collectionName, items) {
     return connect().then(function(db) {
-        var collection = db.collection(collectionName);
+        let collection = db.collection(collectionName);
         return collection.insert(items);
     });
 };
 
-var find = function(collectionName, query) {
+const find = function(collectionName, query) {
     query = query || {};
     return connect().then(function(db) {
-        var collection = db.collection(collectionName);
+        let collection = db.collection(collectionName);
         return collection.find(query).toArray();
     });
 };
 
-var remove = function(collectionName, query) {
+const remove = function(collectionName, query) {
     query = query || {};
     return connect().then(function(db) {
-        var collection = db.collection(collectionName);
+        let collection = db.collection(collectionName);
         return collection.remove(query);
     });
 };
 
-var drop = function(collectionName) {
+const drop = function(collectionName) {
     return connect()
         .then(function(db) {
-            var collection = db.collection(collectionName);
+            let collection = db.collection(collectionName);
             return collection.drop();
         })
         // Collection.drop will throw exception if collection does not exist. Catch the exception and resolve promise anyway.

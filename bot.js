@@ -17,6 +17,15 @@ const skipPattern = /перевод|не знаю|дальше|не помню|^
 const yesPattern = /^да$|^ага$|^ок$|^ладно$|^хорошо$|^давай$/i;
 const noPattern = /^нет$/i;
 
+const states = {
+    next: 'next',
+    stats: 'stats',
+    skip: 'skip',
+    correct: 'correct',
+    wrongOnce: 'wrongOnce',
+    wrongTwice: 'wrongTwice'
+};
+
 // Webhook for remote, polling for local
 let options = useWebhook ? {
     webHook: {
@@ -37,19 +46,22 @@ const main = function() {
     bot.on('message', function(userMessage) {
         let chatId = userMessage.chat.id;
         let userName = getUserName(userMessage);
-        let currentWord;
         getBotMessage(userMessage)
             .then(function(data) {
-                currentWord = data.word;
-                return bot.sendMessage(chatId, data.message);
+                return Promise.all([data, bot.sendMessage(chatId, data.message)]);
             })
-            .then(function(botMessage) {
-                Vocab.saveCurrentWord(currentWord, chatId);
+            .then(function(result) {
+                let data = result[0];
+                if (data) {
+                    Vocab.saveHistory(data, chatId);
+                }
+                let botMessage = result[1];
+
                 var botMessageTextLog = botMessage.text.replace(/\n/g, ' ');
                 debug(`Chat ${chatId} ${userName}, tickets: ${botMessageTextLog}.`);
             })
             .catch(function(error) {
-                // No more words for a timebeing
+                // No more words
                 if (error instanceof Vocab.NoTermsException) {
                     return bot.sendMessage(chatId, 'Слова закончились.');
                 // All other errors
@@ -69,61 +81,69 @@ const getBotMessage = function(userMessage) {
     let chatId = userMessage.chat.id;
     let userMessageText = _.trim(userMessage.text);
 
-    let promise;
+    // TODO Always fetch history before response
+    return Vocab.getHistory(chatId)
+        .then(function(data) {
+            let currentWord = data.word;
+            let term = currentWord && currentWord.getTerm();
+            let translation = currentWord && currentWord.getTranslation();
+            let previousState = data.state;
+            let promise;
 
-    // Answer requested: get current word, if any.
-    if (noPattern.test(userMessageText)) {
-        // TODO Show stats?
-    // Word requested: show random word.
-    } else if (anotherWordPattern.test(userMessageText) || yesPattern.test(userMessageText)) {
-        promise = Vocab.Word.createRandom(chatId)
-            .then(function(word) {
-                return {word: word, message: formatWord(word)};
-            });
-    // User answer to be checked or hint request
-    } else {
-        promise = Vocab.getCurrentWord(chatId)
-            .then(function(currentWord) {
-                let term = currentWord && currentWord.getTerm();
-                let translation = currentWord && currentWord.getTranslation();
-                let promise;
-                // Skipping the word
-                if (skipPattern.test(userMessageText)) {
-                    // Wait for the score to save before proceeding
-                    promise = Score.add(currentWord, Score.status.skipped, chatId)
-                        .then(function() {
-                            // TODO Handle the case when there is no current word / term
-                            // `Не могу вспомнить слово, которое я спрашивал.\nВот следующее:\n\n${formatted}`;
-                            let message = `${translation} → ${term}\n\nПродолжим?`;
-                            return {word: currentWord, message: message};
-                        });
-                // Answer is correct
-                } else if (isTermCorrect(term, userMessageText)) {
-                    // Wait until the score is saved before choosing the next random word.
-                    // Otherwise current word might be randomly chosen again, because it is not yet marked as correct.
-                    promise = Score.add(currentWord, Score.status.correct, chatId)
-                        .then(function() {
-                            return Vocab.Word.createRandom(chatId);
-                        })
-                        .then(function(nextWord) {
-                            let message = formatWord(nextWord);
-                            return {word: nextWord, message: message};
-                        });
-                // Answer is wrong
-                } else {
-                    // Wait for the score to save before proceeding
-                    promise = Score.add(currentWord, Score.status.wrong, chatId)
-                        .then(function() {
-                            // TODO Handle the case when there is no current word / term
-                            let message = `${translation} → ${term}\n\nПродолжим?`;
-                            return {word: currentWord, message: message};
-                        });
-                }
-                return promise;
-            });
-    }
-
-    return promise;
+            // Negative answer: look at previous state to determine the question
+            if (noPattern.test(userMessageText)) {
+                // TODO Show stats?
+                // Promise.resolve({state: states.stats});
+            // Word requested: show random word.
+            } else if (anotherWordPattern.test(userMessageText) || yesPattern.test(userMessageText)) {
+                promise = Vocab.Word.createRandom(chatId)
+                    .then(function(word) {
+                        return {word: word, message: formatWord(word), state: states.next};
+                    });
+            // Skipping the word
+            } else if (skipPattern.test(userMessageText)) {
+                // Wait for the score to save before proceeding
+                promise = Score.add(currentWord, Score.status.skipped, chatId)
+                    .then(function() {
+                        // TODO Handle the case when there is no current word / term
+                        // `Не могу вспомнить слово, которое я спрашивал.\nВот следующее:\n\n${formatted}`;
+                        let message = `${translation} → ${term}\n\nПродолжим?`;
+                        return {word: currentWord, message: message, state: states.skip};
+                    });
+            // Answer is correct
+            } else if (isTermCorrect(term, userMessageText)) {
+                // Wait until the score is saved before choosing the next random word.
+                // Otherwise current word might be randomly chosen again, because it is not yet marked as correct.
+                promise = Score.add(currentWord, Score.status.correct, chatId)
+                    .then(function() {
+                        return Vocab.Word.createRandom(chatId);
+                    })
+                    .then(function(nextWord) {
+                        let formatted = formatWord(nextWord);
+                        let message = `Правильно.\n\nНовое слово:\n${formatted}`;
+                        return {word: nextWord, message: message, state: states.correct};
+                    });
+            // Answer is wrong
+            } else {
+                // Wait for the score to save before proceeding
+                promise = Score.add(currentWord, Score.status.wrong, chatId)
+                    .then(function() {
+                        // TODO Handle the case when there is no current word / term
+                        // User has already been wrong once, this is the second failed attempt
+                        let message;
+                        let state;
+                        if (previousState === states.wrongOnce) {
+                            message = `${translation} → ${term}\n\nПродолжим?`;
+                            state = states.wrongTwice;
+                        } else {
+                            message = `Нет, неправильно.\nСделай ещё одну попытку.`;
+                            state = states.wrongOnce;
+                        }
+                        return {word: currentWord, message: message, state: state};
+                    });
+            }
+            return promise;
+        });
 };
 
 /**
