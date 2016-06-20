@@ -1,17 +1,25 @@
 "use strict";
 
-let Storage = require('./storage');
-let Score = require('./score');
+const Storage = require('./storage');
+const Score = require('./score');
+const UserSettings = require('./user-settings');
 
-let debug = require('debug')('vocab');
-let _ = require('lodash');
-let moment = require('moment');
+const Promise = require('bluebird');
+const debug = require('debug')('vocab');
+const _ = require('lodash');
+const moment = require('moment');
 
 /**
  * Path to vocabulary file
  * @type {string}
  */
 const listFilePath = './data/vocabulary.json';
+
+/**
+ * Maximum number of words per iteration
+ * @type {number}
+ */
+const maxWordCount = 100;
 
 let pairs;
 
@@ -70,10 +78,25 @@ const NoTermsException = function() {};
 
 // TODO Store all word pairs in a database
 /**
- * Reads all words from file into a list
- * @returns {Object}
+ * Returns a custom portion of word pairs (e.g., first 50)
+ * @param {Number} chatId
+ * @returns {Promise}
  */
-const getPairs = function() {
+const getPairsPortion = function(chatId) {
+    // Return a portion of word pairs depending on custom word count
+    return UserSettings.getValue('wordCount', chatId)
+        .then(function(wordCount) {
+            let pairs = getAllPairs();
+            wordCount = wordCount || maxWordCount;
+            let keys = _.keys(pairs).slice(0, wordCount);
+            return _.pick(pairs, keys);
+        });
+};
+
+/**
+ * Reads all words from file into an object where key is the English term and value is a corresponding term in another language
+ */
+const getAllPairs = function() {
     if (!pairs) {
         pairs = require(listFilePath);
     }
@@ -86,20 +109,27 @@ const getPairs = function() {
  * @returns {String}
  */
 const getRandomTerm = function(chatId) {
-    let pairs = getPairs();
-    let allTerms = _.keys(pairs);
-
-    // Do not include words answered correctly
-    return Score.getAll(chatId)
-        .then(function(allScores) {
+    return getPairsPortion(chatId)
+        .then(function(pairs) {
+            let allTerms = _.keys(pairs);
+            return Promise.all([allTerms, Score.all(chatId)]);
+        }).then(function(result) {
+            let allTerms = result[0];
+            let allScores = result[1];
+            // List of touched terms ordered by date, earlies first.
             let touchedTerms = _.map(allScores, 'term');
             // First try excluding all touched (correct, incorrect and skipped) words and see if there is anything left.
             let availableTerms = _.difference(allTerms, touchedTerms);
+            // A flag indicating that all terms were touched
+            let allTermsTouched = false;
 
             // If there are no untouched terms, try excluding only correct terms.
             if (!availableTerms.length) {
+                allTermsTouched = true;
                 let correctTerms = _.map(_.filter(allScores, {status: Score.status.correct}), 'term');
                 availableTerms = _.difference(allTerms, correctTerms);
+                // Order available terms by score / touch date, starting from an earliest date.
+                availableTerms = _.intersection(touchedTerms, availableTerms);
             }
 
             // If no terms left anyway, no skipped or incorrect ones, throw exception
@@ -107,7 +137,9 @@ const getRandomTerm = function(chatId) {
                 throw new NoTermsException();
             }
 
-            let index = _.random(0, availableTerms.length - 1);
+            // If selecting among touched term (the case when all terms are touched), select the first word in the list ordered by touch date.
+            // If selecting from untouched terms, choose randomly.
+            let index = allTermsTouched ? 0 : _.random(0, availableTerms.length - 1);
             return availableTerms[index];
         });
 };
@@ -118,7 +150,7 @@ const getRandomTerm = function(chatId) {
  * @returns {String}
  */
 const translate = function(term) {
-    return getPairs()[term];
+    return getAllPairs()[term];
 };
 
 /**
@@ -158,6 +190,7 @@ const getHistory = function(chatId) {
 };
 
 module.exports = {
+    maxWordCount: maxWordCount,
     Word: Word,
     getRandomTerm: getRandomTerm,
     saveHistory: saveHistory,

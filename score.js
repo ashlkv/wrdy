@@ -19,14 +19,20 @@ const status = {
  * @returns {Promise}
  */
 const add = function(word, status, chatId) {
-    return Storage.insert(Storage.collectionName.score, {
-        term: word && word.getTerm(),
-        translation: word && word.getTranslation(),
-        clue: word && word.getClue(),
-        date: moment().toDate(),
-        status: status,
-        chatId: chatId
-    });
+    let term = word && word.getTerm();
+    // Remove all previous score entries for this user / term. Store only one score record per user / term.
+    return Storage
+        .remove(Storage.collectionName.score, {chatId: chatId, term: term})
+        .then(function() {
+            Storage.insert(Storage.collectionName.score, {
+                term: term,
+                translation: word && word.getTranslation(),
+                clue: word && word.getClue(),
+                date: moment().toDate(),
+                status: status,
+                chatId: chatId
+            });
+        });
 };
 
 /**
@@ -34,9 +40,18 @@ const add = function(word, status, chatId) {
  * @param {Number} chatId
  * @returns {Promise}
  */
-const getAll = function(chatId) {
+const all = function(chatId) {
     // TODO Limit results timespan, otherwise it will be too many records soon.
-    return Storage.find(Storage.collectionName.score, {
+    return Storage.find(Storage.collectionName.score, {chatId: chatId}, 'date');
+};
+
+/**
+ * Returns score count for given chatId
+ * @param {Number} chatId
+ * @returns {Promise}
+ */
+const count = function(chatId) {
+    return Storage.count(Storage.collectionName.score, {
         chatId: chatId
     });
 };
@@ -54,7 +69,8 @@ const reset = function(chatId) {
 
 module.exports = {
     add: add,
-    getAll: getAll,
+    all: all,
+    count: count,
     reset: reset,
     status: status
 };

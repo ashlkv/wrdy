@@ -1,29 +1,41 @@
 "use strict";
 
-let Vocab = require('./vocab');
-let Score = require('./score');
-let TelegramBot = require('node-telegram-bot-api');
+const Vocab = require('./vocab');
+const Score = require('./score');
+const UserSettings = require('./user-settings');
+const Language = require('./language');
 
-let Promise = require('bluebird');
-let botan = require('botanio')(process.env.TELEGRAM_BOT_ANALYTICS_TOKEN);
-let debug = require('debug')('bot');
-let _ = require('lodash');
+const TelegramBot = require('node-telegram-bot-api');
+const Promise = require('bluebird');
+const botan = require('botanio')(process.env.TELEGRAM_BOT_ANALYTICS_TOKEN);
+const debug = require('debug')('bot');
+const _ = require('lodash');
 
 const useWebhook = Boolean(process.env.USE_WEBHOOK);
 
 // TODO Differentiate between answers and commands. Use buttons for commands.
-const anotherWordPattern = /^слово$|^\/start/i;
+const startPattern = /^\/start$/i;
+const helpPattern = /^\/help$/i;
+const wordCountValuePattern = /^(\d+|десять|двадцать|пятьдесят|сто|ltcznm|ldflwfnm|gznmltczn|cnj) ?(слов|слова|слово|ckjd|ckjdf|ckjdj)?$/i;
+const wordCountCommandPattern = /^\/count$/i;
+const anotherWordPattern = /^слово$/i;
 const skipPattern = /перевод|не знаю|дальше|не помню|^ещ(е|ё)|^\?$/i;
 const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$/i;
 const noPattern = /^нет$/i;
 
+/**
+ * Available states. State is a summary of user message recieved (e.g., a command, a wrong annswer or a next word request).
+ * @type {{next: string, stats: string, skip: string, correct: string, wrongOnce: string, wrongTwice: string, command: string}}
+ */
 const states = {
     next: 'next',
     stats: 'stats',
     skip: 'skip',
     correct: 'correct',
     wrongOnce: 'wrongOnce',
-    wrongTwice: 'wrongTwice'
+    wrongTwice: 'wrongTwice',
+    wordCountCommand: 'wordCountCommand',
+    wordCountValue: 'wordCountValue'
 };
 
 // Webhook for remote, polling for local
@@ -81,17 +93,38 @@ const getBotMessage = function(userMessage) {
     let chatId = userMessage.chat.id;
     let userMessageText = _.trim(userMessage.text);
 
-    // TODO Always fetch history before response
     return Vocab.getHistory(chatId)
         .then(function(data) {
             let currentWord = data.word;
             let term = currentWord && currentWord.getTerm();
             let translation = currentWord && currentWord.getTranslation();
+            // A summary of user message recieved prior to current user message.
             let previousState = data.state;
             let promise;
 
+            // Starting the conversation or explicitly setting a word cound
+            if (startPattern.test(userMessageText) || wordCountCommandPattern.test(userMessageText)) {
+                let message = `Сколько слов в неделю хочешь учить? 20 / 50 / ${Vocab.maxWordCount}?`;
+                promise = {message: message, state: states.wordCountCommand};
+            } else if (previousState === states.wordCountCommand && wordCountValuePattern.test(userMessageText)) {
+                let numberString = userMessageText.match(wordCountValuePattern)[1];
+                let number = Language.parseNumberString(numberString, Vocab.maxWordCount);
+                number = number > Vocab.maxWordCount ? Vocab.maxWordCount : number;
+                promise = UserSettings.setValue('wordCount', number, chatId)
+                    .then(function() {
+                        return Promise.all([Vocab.Word.createRandom(chatId), Score.count(chatId)]);
+                    })
+                    .then(function(result) {
+                        let nextWord = result[0];
+                        let scoreCount = result[1];
+                        let formatted = formatWord(nextWord);
+                        let numberCaption = Language.numberCaption(number, 'слово', 'слова', 'слов');
+                        let newWordSentence = scoreCount === 0 ? `Первое слово:\n${formatted}` : `Следующее слово:\n${formatted}`;
+                        let message = `Ок, ${number} ${numberCaption} в неделю.\n\n${newWordSentence}`;
+                        return {word: nextWord, message: message, state: states.wordCountValue};
+                    });
             // Negative answer: look at previous state to determine the question
-            if (noPattern.test(userMessageText)) {
+            } else if (noPattern.test(userMessageText)) {
                 // TODO Show stats?
                 // Promise.resolve({state: states.stats});
             // Word requested: show random word.

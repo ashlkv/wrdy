@@ -1,14 +1,16 @@
 "use strict";
 
-var Promise = require('bluebird');
-var mongoClient = require('mongodb').MongoClient;
+const Promise = require('bluebird');
+const mongoClient = require('mongodb').MongoClient;
+const _ = require('lodash');
+let debug = require('debug')('storage');
 
-var connection;
+let connection;
 
 const collectionName = {
     score: 'score',
-    currentWord: 'currentWord',
-    history: 'history'
+    history: 'history',
+    settings: 'settings'
 };
 
 /**
@@ -39,11 +41,23 @@ const insert = function(collectionName, items) {
     });
 };
 
-const find = function(collectionName, query) {
+/**
+ *
+ * @param {String} collectionName
+ * @param {Object} query
+ * @param {Object} [sorter] Example: date: true}
+ * @returns {*}
+ */
+const find = function(collectionName, query, sorter) {
     query = query || {};
     return connect().then(function(db) {
         let collection = db.collection(collectionName);
         return collection.find(query).toArray();
+    }).then(function(result) {
+        if (sorter) {
+            result = _.sortBy(result, sorter);
+        }
+        return result;
     });
 };
 
@@ -52,6 +66,14 @@ const remove = function(collectionName, query) {
     return connect().then(function(db) {
         let collection = db.collection(collectionName);
         return collection.remove(query);
+    });
+};
+
+const count = function(collectionName, query) {
+    query = query || {};
+    return connect().then(function(db) {
+        let collection = db.collection(collectionName);
+        return collection.count(query);
     });
 };
 
@@ -73,5 +95,6 @@ module.exports = {
     insert: insert,
     find: find,
     remove: remove,
+    count: count,
     drop: drop
 };
