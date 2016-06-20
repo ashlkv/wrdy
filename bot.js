@@ -105,10 +105,14 @@ const getBotMessage = function(userMessage) {
                 // Wait for the score to save before proceeding
                 promise = Score.add(currentWord, Score.status.skipped, chatId)
                     .then(function() {
+                        return Vocab.Word.createRandom(chatId);
+                    })
+                    .then(function(nextWord) {
                         // TODO Handle the case when there is no current word / term
                         // `Не могу вспомнить слово, которое я спрашивал.\nВот следующее:\n\n${formatted}`;
-                        let message = `${translation} → ${term}\n\nПродолжим?`;
-                        return {word: currentWord, message: message, state: states.skip};
+                        let formatted = formatWord(nextWord);
+                        let message = `${translation} → ${term}\n\nНовое слово:\n${formatted}`;
+                        return {word: nextWord, message: message, state: states.skip};
                     });
             // Answer is correct
             } else if (isTermCorrect(term, userMessageText)) {
@@ -128,18 +132,29 @@ const getBotMessage = function(userMessage) {
                 // Wait for the score to save before proceeding
                 promise = Score.add(currentWord, Score.status.wrong, chatId)
                     .then(function() {
+                        let nextWord = true;
+                        // If this is the second mistake, show correct answer and a new word
+                        if (previousState === states.wrongOnce) {
+                            nextWord = Vocab.Word.createRandom(chatId);
+                        }
+                        return nextWord;
+                    })
+                    .then(function(nextWord) {
                         // TODO Handle the case when there is no current word / term
                         // User has already been wrong once, this is the second failed attempt
                         let message;
                         let state;
+                        let word = currentWord;
                         if (previousState === states.wrongOnce) {
-                            message = `${translation} → ${term}\n\nПродолжим?`;
+                            let formatted = formatWord(nextWord);
+                            message = `${translation} → ${term}\n\nНовое слово:\n${formatted}`;
                             state = states.wrongTwice;
+                            word = nextWord;
                         } else {
                             message = `Нет, неправильно.\nСделай ещё одну попытку.`;
                             state = states.wrongOnce;
                         }
-                        return {word: currentWord, message: message, state: state};
+                        return {word: word, message: message, state: state};
                     });
             }
             return promise;
