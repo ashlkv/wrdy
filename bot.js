@@ -14,7 +14,8 @@ const _ = require('lodash');
 const useWebhook = Boolean(process.env.USE_WEBHOOK);
 
 // TODO Differentiate between answers and commands. Use buttons for commands.
-const startPattern = /^\/start$/i;
+// Sometimes first message text is "/start Start" instead of just "/start": test with regexp
+const startPattern = /^\/start/i;
 const helpPattern = /^\/help$/i;
 const wordCountValuePattern = /^(\d+|десять|двадцать|пятьдесят|сто|ltcznm|ldflwfnm|gznmltczn|cnj) ?(слов|слова|слово|ckjd|ckjdf|ckjdj)?$/i;
 const wordCountCommandPattern = /^\/count$/i;
@@ -22,6 +23,8 @@ const anotherWordPattern = /^слово$/i;
 const skipPattern = /перевод|не знаю|дальше|не помню|^ещ(е|ё)|^\?$/i;
 const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$/i;
 const noPattern = /^нет$/i;
+
+const helpText = '/count — задать количество слов\nперевод / ? — показать перевод\nслово — попросить новое слово';
 
 /**
  * Available states. State is a summary of user message recieved (e.g., a command, a wrong annswer or a next word request).
@@ -35,7 +38,8 @@ const states = {
     wrongOnce: 'wrongOnce',
     wrongTwice: 'wrongTwice',
     wordCountCommand: 'wordCountCommand',
-    wordCountValue: 'wordCountValue'
+    wordCountValue: 'wordCountValue',
+    helpCommand: 'helpCommand'
 };
 
 // Webhook for remote, polling for local
@@ -103,7 +107,9 @@ const getBotMessage = function(userMessage) {
             let promise;
 
             // Starting the conversation or explicitly setting a word cound
-            if (startPattern.test(userMessageText) || wordCountCommandPattern.test(userMessageText)) {
+            if (helpPattern.test(userMessageText)) {
+                promise = {message: helpText, state: states.helpCommand};
+            } else if (startPattern.test(userMessageText) || wordCountCommandPattern.test(userMessageText)) {
                 let message = `Сколько слов в неделю хочешь учить? 20 / 50 / ${Vocab.maxWordCount}?`;
                 promise = {message: message, state: states.wordCountCommand};
             } else if (previousState === states.wordCountCommand && wordCountValuePattern.test(userMessageText)) {
