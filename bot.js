@@ -147,10 +147,12 @@ const getBotMessage = function(userMessage) {
                         return Vocab.Word.createRandom(chatId);
                     })
                     .then(function(nextWord) {
-                        // TODO Handle the case when there is no current word / term
-                        // `Не могу вспомнить слово, которое я спрашивал.\nВот следующее:\n\n${formatted}`;
-                        let formatted = formatWord(nextWord);
-                        let message = `${translation} → ${term}\n\nНовое слово:\n${formatted}`;
+                        let message = '';
+                        if (translation && term) {
+                            message = `${translation} → ${term}\n\n`;
+                        }
+                        var formatted = formatWord(nextWord);
+                        message += `Новое слово:\n${formatted}`;
                         return {word: nextWord, message: message, state: states.skip};
                     });
             // Answer is correct
