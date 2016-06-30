@@ -24,7 +24,7 @@ const skipPattern = /перевод|не знаю|дальше|не помню|^
 const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$/i;
 const noPattern = /^нет$/i;
 
-const helpText = '/count — задать количество слов\nперевод / ? — показать перевод\nслово — попросить новое слово';
+const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово';
 
 /**
  * Available states. State is a summary of user message recieved (e.g., a command, a wrong annswer or a next word request).
@@ -165,7 +165,7 @@ const getBotMessage = function(userMessage) {
                     })
                     .then(function(nextWord) {
                         let formatted = formatWord(nextWord);
-                        let message = `Правильно.\n\nНовое слово:\n${formatted}`;
+                        let message = `👍\n\nНовое слово:\n${formatted}`;
                         return {word: nextWord, message: message, state: states.correct};
                     });
             // Answer is wrong
@@ -192,7 +192,8 @@ const getBotMessage = function(userMessage) {
                             state = states.wrongTwice;
                             word = nextWord;
                         } else {
-                            message = `Нет, неправильно.\nСделай ещё одну попытку.`;
+                            let formatted = currentWord.getClue();
+                            message = `Нет, неправильно.\nСделай ещё одну попытку:\n${formatted}`;
                             state = states.wrongOnce;
                         }
                         return {word: word, message: message, state: state};
