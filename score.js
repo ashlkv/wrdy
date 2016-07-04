@@ -1,9 +1,9 @@
 "use strict";
 
-let Storage = require('./storage');
+const Storage = require('./storage');
 
-let debug = require('debug')('score');
-let moment = require('moment');
+const debug = require('debug')('score');
+const moment = require('moment');
 
 const status = {
     skipped: 'skipped',
