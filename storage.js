@@ -10,7 +10,8 @@ let connection;
 const collectionName = {
     score: 'score',
     history: 'history',
-    settings: 'settings'
+    settings: 'settings',
+    dictionary: 'dictionary'
 };
 
 /**
