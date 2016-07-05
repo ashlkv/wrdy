@@ -4,13 +4,20 @@ const Storage = require('./storage');
 
 const debug = require('debug')('score');
 const moment = require('moment');
+const _ = require('lodash');
 
 const collectionName = 'score';
 
 const status = {
-    skipped: 'skipped',
+    correct: 'correct',
     wrong: 'wrong',
-    correct: 'correct'
+    skipped: 'skipped'
+};
+
+const statusTranslations = {
+    correct: 'Правильно',
+    wrong: 'Неправильно',
+    skipped: 'Пропущено'
 };
 
 /**
@@ -69,10 +76,34 @@ const reset = function(chatId) {
     });
 };
 
+const getStats = function(chatId) {
+    return all(chatId)
+        .then(function(score) {
+            let lines = [];
+            _.forEach(_.keys(status), function(statusKey) {
+                let count = getCountByStatus(score, statusKey);
+                if (count) {
+                    lines.push(`${statusTranslations[statusKey]}: ${count}`);
+                }
+            });
+            return lines.length ? lines.join('\n') : 'Статистики пока нет';
+        });
+};
+
+/**
+ * @param {Array} score
+ * @param {String} status
+ * @returns {Number} count
+ */
+const getCountByStatus = function(score, status) {
+    return _.filter(score, {status: status}).length;
+};
+
 module.exports = {
     add: add,
     all: all,
     count: count,
     reset: reset,
-    status: status
+    status: status,
+    getStats: getStats
 };

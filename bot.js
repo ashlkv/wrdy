@@ -18,14 +18,14 @@ const useWebhook = Boolean(process.env.USE_WEBHOOK);
 // Sometimes first message text is "/start Start" instead of just "/start": test with regexp
 const startPattern = /^\/start/i;
 const helpPattern = /^\/help$/i;
+const statsPattern = /^\/stats?$/i;
 const wordCountValuePattern = /^(\d+|десять|двадцать|пятьдесят|сто|ltcznm|ldflwfnm|gznmltczn|cnj) ?(слов|слова|слово|ckjd|ckjdf|ckjdj)?$/i;
 const wordCountCommandPattern = /^\/count$/i;
 const anotherWordPattern = /^слово$/i;
 const skipPattern = /перевод|не знаю|дальше|не помню|^ещ(е|ё)|^\?$/i;
 const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$/i;
-const noPattern = /^нет$/i;
 
-const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово';
+const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово\n/stats — статистика';
 const adminHelpText = '/nextvocab — показать слова для следующей недели\n51 cat кошка — исправить слово и перевод\n51 cat — исправить только слово\n51 кошка — исправить только перевод';
 
 const nextVocabPattern = /^\/nextvocab/i;
@@ -151,9 +151,11 @@ const getBotMessage = function(userMessage) {
                         return {word: nextWord, message: message, state: states.wordCountValue};
                     });
             // Negative answer: look at previous state to determine the question
-            } else if (noPattern.test(userMessageText)) {
-                // TODO Show stats?
-                // Promise.resolve({state: states.stats});
+            } else if (statsPattern.test(userMessageText)) {
+                promise = Score.getStats(chatId)
+                    .then(function(message) {
+                        return {message: message, state: states.stats};
+                    });
             // Word requested: show random word.
             } else if (anotherWordPattern.test(userMessageText) || yesPattern.test(userMessageText)) {
                 promise = Vocab.Word.createRandom(chatId)
