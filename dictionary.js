@@ -17,6 +17,9 @@
 
 const Storage = require('./storage');
 const Wordnik = require('./wordnik');
+const Top15000 = require('./top15000');
+// TODO Perhaps maxWordCount constant should be moved from vocab module
+const Vocab = require('./vocab');
 
 const Promise = require('bluebird');
 const request = require('request-promise');
@@ -24,6 +27,8 @@ const debug = require('debug')('dictionary');
 const _ = require('lodash');
 
 const yandexTranslateUrl = 'https://translate.yandex.net/api/v1.5/tr.json/translate';
+
+const collectionName = 'dictionary';
 
 const wordStatus = {
     current: 'current',
@@ -33,12 +38,6 @@ const wordStatus = {
 
 let nextWords;
 let currentWords;
-
-/**
- * @typedef {Object} WordnikWord
- * @property {Number} id Wordnik id
- * @property {string} word The word
- */
 
 /**
  * @typedef {Object} Word
@@ -52,20 +51,15 @@ let currentWords;
 const fetchTerms = function() {
     // TODO Wordnik returning words like wrist-drop, declawing and Pyhrric is a lot of fun, but better replace it with a different service.
     if (process.env.TERMS_PROVIDER === 'wordnik') {
-        return Wordnik.fetchTerms();
+        return Wordnik.fetchTerms(Vocab.maxWordCount);
     } else {
-        return fetchVocabularyTerms();
+        return getNextOrderNumber()
+            .then(function(number) {
+                // Fetching 100 terms starting from number of words already in dictionary to avoid duplicates
+                return Top15000.fetchTerms(Vocab.maxWordCount, number);
+            });
     }
 };
-
-/**
- * @returns {Promise.<Array.<Word>>}
- */
-const fetchVocabularyTerms = function() {
-    // TODO Implement
-    return [];
-};
-
 
 /**
  * Translates terms with Google Translate service
@@ -152,19 +146,32 @@ const fetchWords = function() {
 };
 
 /**
+ * Returns the next order number, zero-based
+ * @returns {Promise.<Number>}
+ */
+const getNextOrderNumber = function() {
+    return Storage.count(collectionName);
+};
+
+/**
  * Stores words in local storage with a status, if given.
  * @param {Array.<Word>} words
  * @param {String} status
  * @returns {Promise.<Array.<Word>>}
  */
 const storeWords = function(words, status) {
-    if (status) {
-        _.forEach(words, function(word) {
-            word.status = status;
+    return getNextOrderNumber()
+        // Adding order number
+        .then(function(order) {
+            _.forEach(words, function(word) {
+                if (status) {
+                    word.status = status;
+                }
+                word.order = order;
+                order ++;
+            });
+            return Storage.insert(collectionName, words);
         });
-    }
-    // TODO Add order number
-    return Storage.insert(Storage.collectionName.dictionary, words);
 };
 
 /**
@@ -174,7 +181,7 @@ const storeWords = function(words, status) {
 const getNextWords = function() {
     // Check next words cache
     if (!nextWords) {
-        return Storage.find(Storage.collectionName.dictionary, {status: wordStatus.next}, 'order')
+        return Storage.find(collectionName, {status: wordStatus.next}, 'order')
             .then(function(words) {
                 if (!words.length) {
                     return fetchWords()
@@ -204,7 +211,7 @@ const getNextWords = function() {
 const getCurrentWords = function() {
     // Check current words cache
     if (!currentWords) {
-        return Storage.find(Storage.collectionName.dictionary, {status: wordStatus.current}, 'order')
+        return Storage.find(collectionName, {status: wordStatus.current}, 'order')
             .then(function(words) {
                 if (!words.length) {
                     throw new Error('No words in dictionary for current timespan.');

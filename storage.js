@@ -7,13 +7,6 @@ let debug = require('debug')('storage');
 
 let connection;
 
-const collectionName = {
-    score: 'score',
-    history: 'history',
-    settings: 'settings',
-    dictionary: 'dictionary'
-};
-
 /**
  * @returns {Promise}
  */
@@ -37,8 +30,7 @@ const connect = function() {
 
 const insert = function(collectionName, items) {
     return connect().then(function(db) {
-        let collection = db.collection(collectionName);
-        return collection.insert(items);
+        return db.collection(collectionName).insert(items);
     });
 };
 
@@ -46,43 +38,43 @@ const insert = function(collectionName, items) {
  *
  * @param {String} collectionName
  * @param {Object} query
- * @param {Object} [sorter] Example: date: true}
+ * @param {String|Array|Object} [sorter]
+ * @param {Number} [limit]
+ * @param {Number} [skip]
  * @returns {*}
  */
-const find = function(collectionName, query, sorter) {
-    query = query || {};
+const find = function(collectionName, query, sorter, limit, skip) {
     return connect().then(function(db) {
-        let collection = db.collection(collectionName);
-        return collection.find(query).toArray();
-    }).then(function(result) {
+        let cursor = db.collection(collectionName).find(query);
         if (sorter) {
-            result = _.sortBy(result, sorter);
+            cursor.sort(sorter);
         }
-        return result;
+        if (skip) {
+            cursor.skip(skip);
+        }
+        if (limit) {
+            cursor.limit(limit);
+        }
+        return cursor.toArray();
     });
 };
 
 const remove = function(collectionName, query) {
-    query = query || {};
     return connect().then(function(db) {
-        let collection = db.collection(collectionName);
-        return collection.remove(query);
+        return db.collection(collectionName).remove(query);
     });
 };
 
 const count = function(collectionName, query) {
-    query = query || {};
     return connect().then(function(db) {
-        let collection = db.collection(collectionName);
-        return collection.count(query);
+        return db.collection(collectionName).count(query);
     });
 };
 
 const drop = function(collectionName) {
     return connect()
         .then(function(db) {
-            let collection = db.collection(collectionName);
-            return collection.drop();
+            return db.collection(collectionName).drop();
         })
         // Collection.drop will throw exception if collection does not exist. Catch the exception and resolve promise anyway.
         .catch(function() {
@@ -91,7 +83,6 @@ const drop = function(collectionName) {
 };
 
 module.exports = {
-    collectionName: collectionName,
     connect: connect,
     insert: insert,
     find: find,

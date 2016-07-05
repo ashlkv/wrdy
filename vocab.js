@@ -9,6 +9,8 @@ const debug = require('debug')('vocab');
 const _ = require('lodash');
 const moment = require('moment');
 
+const collectionName = 'history';
+
 /**
  * Path to vocabulary file
  * @type {string}
@@ -161,9 +163,9 @@ const translate = function(term) {
  */
 const saveHistory = function(data, chatId) {
     return Storage
-        .remove(Storage.collectionName.history, {chatId: chatId})
+        .remove(collectionName, {chatId: chatId})
         .then(function() {
-            return Storage.insert(Storage.collectionName.history, {
+            return Storage.insert(collectionName, {
                 data: data,
                 date: moment().toDate(),
                 chatId: chatId
@@ -178,7 +180,7 @@ const saveHistory = function(data, chatId) {
  */
 const getHistory = function(chatId) {
     return Storage
-        .find(Storage.collectionName.history, {chatId: chatId})
+        .find(collectionName, {chatId: chatId})
         .then(function(entries) {
             let data = entries.length ? entries[0].data : {};
             // Hydrating the word object

@@ -5,6 +5,8 @@ const debug = require('debug')('user-settings');
 
 const Storage = require('./storage');
 
+const collectionName = 'settings';
+
 /**
  * Get settings value
  * @param {String} key
@@ -14,7 +16,7 @@ const Storage = require('./storage');
 let getValue = function(key, chatId) {
     return Storage
         // Get previous collector launch time
-        .find(Storage.collectionName.settings, {chatId: chatId})
+        .find(collectionName, {chatId: chatId})
         .then(function(result) {
             let settings = result && result.length ? result[0] : {};
             return settings[key];
@@ -31,7 +33,7 @@ let getValue = function(key, chatId) {
 let setValue = function(key, value, chatId) {
     return Storage
         // Get previous collector launch time
-        .find(Storage.collectionName.settings, {chatId: chatId})
+        .find(collectionName, {chatId: chatId})
         .then(function(result) {
             let settings = result && result.length ? result[0] : {chatId: chatId};
             if (_.isObject(key)) {
@@ -40,9 +42,9 @@ let setValue = function(key, value, chatId) {
                 settings[key] = value;
             }
             return Storage
-                .remove(Storage.collectionName.settings, {chatId: chatId})
+                .remove(collectionName, {chatId: chatId})
                 .then(function() {
-                    Storage.insert(Storage.collectionName.settings, settings);
+                    Storage.insert(collectionName, settings);
                 });
         });
 };
