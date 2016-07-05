@@ -2,7 +2,7 @@
 
 const Storage = require('./storage');
 const Score = require('./score');
-const UserSettings = require('./user-settings');
+const User = require('./user');
 
 const Promise = require('bluebird');
 const debug = require('debug')('vocab');
@@ -86,7 +86,7 @@ const NoTermsException = function() {};
  */
 const getPairsPortion = function(chatId) {
     // Return a portion of word pairs depending on custom word count
-    return UserSettings.getValue('wordCount', chatId)
+    return User.getValue('wordCount', chatId)
         .then(function(wordCount) {
             let pairs = getAllPairs();
             wordCount = wordCount || maxWordCount;

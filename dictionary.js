@@ -1,18 +1,3 @@
-// Every week, fetch 100 new english words and store them in a database with a "current" or "next" flag.
-// From wordnik
-//
-// Simultaneously save those words in a database to check for duplicates later
-// TODO Pitfall: Those choosing to learn 20/50/70 words a week instead of 100 will always miss on the rest 80/50/30 words.
-// TODO Solution: Assing a global/passthrough order number to each word (1, 2, and then 101, 102) and store word range for each user.
-// Translate words into Russian with either google translate or yandex translate (choose which yields better results)
-// Google is better, although not good. Google is paid ($20 per million characters, which is approx $0.1 a month for wrdy)
-// Yandex is free (if less than 10 million characters).
-// TODO Use yandex translate for development, switch to google for production
-// Show the words for bot admin to review
-// TODO Which is the best interface for words review?
-
-// http://api.wordnik.com:80/v4/words.json/randomWords?hasDictionaryDef=false&minCorpusCount=0&maxCorpusCount=-1&minDictionaryCount=1&maxDictionaryCount=-1&minLength=5&maxLength=-1&limit=10&api_key=a2a73e7b926c924fad7001ca3111acd55af2ffabf50eb4ae5
-
 'use strict';
 
 const Storage = require('./storage');
@@ -131,14 +116,13 @@ const fetchWords = function() {
         .then(function(result) {
             let words = result[0];
             let translations = result[1];
-            debug('fetchWords words', words);
-            debug('fetchWords translations', translations);
             let translatedWords = [];
             // TODO Keep external word id (?)
             _.forEach(words, function(word, i) {
                 translatedWords.push({
                     term: word.term,
-                    translation: translations[i]
+                    translation: translations[i],
+                    number: i + 1
                 });
             });
             return translatedWords;
@@ -163,14 +147,17 @@ const storeWords = function(words, status) {
     return getNextOrderNumber()
         // Adding order number
         .then(function(order) {
-            _.forEach(words, function(word) {
+            // Cloning the collection to avoid changing the source while preparing for storage
+            let wordsEntry = _.cloneDeep(words);
+            _.forEach(wordsEntry, function(word) {
                 if (status) {
                     word.status = status;
                 }
+                delete word.edited;
                 word.order = order;
                 order ++;
             });
-            return Storage.insert(collectionName, words);
+            return Storage.insert(collectionName, wordsEntry);
         });
 };
 
@@ -205,6 +192,45 @@ const getNextWords = function() {
 };
 
 /**
+ *
+ * @param {String} text User message text containing
+ */
+const updateNextWords = function(text) {
+    return getNextWords()
+        .then(function(nextWords) {
+            let lines = text.split("\n");
+            let editedWords = [];
+            _.forEach(lines, function(line) {
+                let match = line.match(/^(\d{1,3})\.?\s?([a-z]+)?([\s→]+)?([а-я]+)?/i);
+                let number = match[1] ? parseInt(match[1]) : null;
+                let term = match[2];
+                let translation = match[4];
+                if (_.isNumber(number) && number > 0) {
+                    let word = nextWords[number - 1];
+                    word.edited = true;
+                    if (term) {
+                        word.term = term;
+                    }
+                    if (translation) {
+                        word.translation = translation;
+                    }
+                    editedWords.push(word);
+                }
+            });
+
+            return Promise.all([nextWords, editedWords, Storage.remove(collectionName, {status: wordStatus.next})]);
+        })
+        .then(function(result) {
+            let nextWords = result[0];
+            let editedWords = result[1];
+            return Promise.all([editedWords, storeWords(nextWords, wordStatus.next)]);
+        })
+        .then(function(result) {
+            return result[0];
+        });
+};
+
+/**
  * Returns current words and translations.
  * @returns {Promise.<Array.<Word>>}
  */
@@ -224,7 +250,17 @@ const getCurrentWords = function() {
     }
 };
 
+const formatWords = function(words) {
+    return _.map(words, function(word, i) {
+        let number = !_.isUndefined(word.number) ? word.number : i + 1;
+        let line = `${number}. ${word.term} → ${word.translation}`;
+        return word.edited ? `<strong>${line}</strong>` : line;
+    }).join("\n")
+};
+
 module.exports = {
     getNextWords: getNextWords,
-    getCurrentWords: getCurrentWords
+    getCurrentWords: getCurrentWords,
+    updateNextWords: updateNextWords,
+    formatWords: formatWords
 };

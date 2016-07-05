@@ -47,6 +47,7 @@ const find = function(collectionName, query, sorter, limit, skip) {
     return connect().then(function(db) {
         let cursor = db.collection(collectionName).find(query);
         if (sorter) {
+            sorter = _.isString(sorter) ? {[sorter]: 1} : sorter;
             cursor.sort(sorter);
         }
         if (skip) {

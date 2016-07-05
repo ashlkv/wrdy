@@ -32,7 +32,6 @@ const populate = function() {
             words.push({term: term});
         }
     });
-    debug('word count', words.length);
     return Storage.insert(collectionName, words);
 };
 

@@ -2,8 +2,9 @@
 
 const Vocab = require('./vocab');
 const Score = require('./score');
-const UserSettings = require('./user-settings');
+const User = require('./user');
 const Language = require('./language');
+const Dictionary = require('./dictionary');
 
 const TelegramBot = require('node-telegram-bot-api');
 const Promise = require('bluebird');
@@ -25,6 +26,10 @@ const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хор�
 const noPattern = /^нет$/i;
 
 const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово';
+const adminHelpText = '/nextvocab — показать слова для следующей недели\n51 cat кошка — исправить слово и перевод\n51 cat — исправить только слово\n51 кошка — исправить только перевод';
+
+const nextVocabPattern = /^\/nextvocab/i;
+const editWordPattern = /^\d{1,3}\.?\s?[a-zа-я]+/i;
 
 /**
  * Available states. State is a summary of user message recieved (e.g., a command, a wrong annswer or a next word request).
@@ -39,7 +44,8 @@ const states = {
     wrongTwice: 'wrongTwice',
     wordCountCommand: 'wordCountCommand',
     wordCountValue: 'wordCountValue',
-    helpCommand: 'helpCommand'
+    helpCommand: 'helpCommand',
+    nextVocabCommand: 'nextVocabCommand'
 };
 
 // Webhook for remote, polling for local
@@ -64,7 +70,7 @@ const main = function() {
         let userName = getUserName(userMessage);
         getBotMessage(userMessage)
             .then(function(data) {
-                return Promise.all([data, bot.sendMessage(chatId, data.message)]);
+                return Promise.all([data, bot.sendMessage(chatId, data.message, {parse_mode: 'HTML'})]);
             })
             .then(function(result) {
                 let data = result[0];
@@ -73,7 +79,7 @@ const main = function() {
                 }
                 let botMessage = result[1];
 
-                var botMessageTextLog = botMessage.text.replace(/\n/g, ' ');
+                let botMessageTextLog = botMessage.text.replace(/\n/g, ' ');
                 debug(`Chat ${chatId} ${userName}, tickets: ${botMessageTextLog}.`);
             })
             .catch(function(error) {
@@ -106,9 +112,24 @@ const getBotMessage = function(userMessage) {
             let previousState = data.state;
             let promise;
 
-            // Starting the conversation or explicitly setting a word cound
-            if (helpPattern.test(userMessageText)) {
-                promise = {message: helpText, state: states.helpCommand};
+            // Show next week vocabulary (admin only)
+            if (nextVocabPattern.test(userMessageText) && User.isAdmin(chatId)) {
+                promise = Dictionary.getNextWords()
+                    .then(function(words) {
+                        let message = Dictionary.formatWords(words);
+                        return {message: message, state: states.nextVocabCommand};
+                    });
+            // Edit next week vocabulary (admin only)
+            } else if (editWordPattern.test(userMessageText) && User.isAdmin(chatId)) {
+                promise = Dictionary.updateNextWords(userMessageText)
+                    .then(function(editedWords) {
+                        let formatted = Dictionary.formatWords(editedWords);
+                        return {message: `Ок, обновил:\n${formatted}`};
+                    });
+            // Asking for help
+            } else if (helpPattern.test(userMessageText)) {
+                promise = {message: helpText + (User.isAdmin(chatId) ? `\n${adminHelpText}` : ''), state: states.helpCommand};
+            // Starting the conversation or explicitly setting a word count
             } else if (startPattern.test(userMessageText) || wordCountCommandPattern.test(userMessageText)) {
                 let message = `Сколько слов в неделю хочешь учить? 20 / 50 / ${Vocab.maxWordCount}?`;
                 promise = {message: message, state: states.wordCountCommand};
@@ -116,7 +137,7 @@ const getBotMessage = function(userMessage) {
                 let numberString = userMessageText.match(wordCountValuePattern)[1];
                 let number = Language.parseNumberString(numberString, Vocab.maxWordCount);
                 number = number > Vocab.maxWordCount ? Vocab.maxWordCount : number;
-                promise = UserSettings.setValue('wordCount', number, chatId)
+                promise = User.setValue('wordCount', number, chatId)
                     .then(function() {
                         return Promise.all([Vocab.Word.createRandom(chatId), Score.count(chatId)]);
                     })
@@ -151,7 +172,7 @@ const getBotMessage = function(userMessage) {
                         if (translation && term) {
                             message = `${translation} → ${term}\n\n`;
                         }
-                        var formatted = formatWord(nextWord);
+                        let formatted = formatWord(nextWord);
                         message += `Новое слово:\n${formatted}`;
                         return {word: nextWord, message: message, state: states.skip};
                     });
@@ -221,6 +242,10 @@ const isTermCorrect = function(term, userMessageText) {
 
 const getUserName = function(userMessage) {
     return `${userMessage.chat.first_name || ''} ${userMessage.chat.last_name || ''}`;
+};
+
+const isAdmin = function(chatId) {
+    return process.env.ADMIN_USER_IDS && (process.env.ADMIN_USER_IDS.split(''))
 };
 
 const setWebhook = function() {

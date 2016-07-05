@@ -1,11 +1,13 @@
 "use strict";
 
 const _ = require('lodash');
-const debug = require('debug')('user-settings');
+const debug = require('debug')('user');
 
 const Storage = require('./storage');
 
 const collectionName = 'settings';
+
+let adminIds;
 
 /**
  * Get settings value
@@ -49,7 +51,20 @@ let setValue = function(key, value, chatId) {
         });
 };
 
+/**
+ * Determines if user with gived id is an admin
+ * @param {Number} chatId Chat / user id
+ * @returns {Boolean}
+ */
+const isAdmin = function(chatId) {
+    if (_.isUndefined(adminIds)) {
+        adminIds = _.map((process.env.ADMIN_IDS || '').split(','), number => parseInt(number));
+    }
+    return adminIds.indexOf(chatId) !== -1;
+};
+
 module.exports = {
     getValue: getValue,
-    setValue: setValue
+    setValue: setValue,
+    isAdmin: isAdmin
 };
