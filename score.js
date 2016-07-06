@@ -14,10 +14,15 @@ const status = {
     skipped: 'skipped'
 };
 
-const statusTranslations = {
+const statusLocale = {
     correct: 'Правильно',
     wrong: 'Неправильно',
     skipped: 'Пропущено'
+};
+
+const timespan = {
+    week: 'week',
+    month: 'month'
 };
 
 /**
@@ -47,11 +52,17 @@ const add = function(word, status, chatId) {
 /**
  * Returns all scores for given chatId
  * @param {Number} chatId
+ * @param {String} [statsTimespan]
  * @returns {Promise}
  */
-const all = function(chatId) {
-    // TODO Limit results timespan, otherwise it will be too many records soon.
-    return Storage.find(collectionName, {chatId: chatId}, 'date');
+const all = function(chatId, statsTimespan) {
+    let query = {chatId: chatId};
+    if (statsTimespan) {
+        query.date = {
+            $gte: moment().startOf(statsTimespan).toDate()
+        }
+    }
+    return Storage.find(collectionName, query, 'date');
 };
 
 /**
@@ -76,14 +87,20 @@ const reset = function(chatId) {
     });
 };
 
-const getStats = function(chatId) {
-    return all(chatId)
+/**
+ * Returns stats text
+ * @param {Number} chatId
+ * @param {String} [statsTimespan]
+ * @returns {String}
+ */
+const getStats = function(chatId, statsTimespan) {
+    return all(chatId, statsTimespan)
         .then(function(score) {
             let lines = [];
             _.forEach(_.keys(status), function(statusKey) {
                 let count = getCountByStatus(score, statusKey);
                 if (count) {
-                    lines.push(`${statusTranslations[statusKey]}: ${count}`);
+                    lines.push(`${statusLocale[statusKey]}: ${count}`);
                 }
             });
             return lines.length ? lines.join('\n') : 'Статистики пока нет';
@@ -100,10 +117,11 @@ const getCountByStatus = function(score, status) {
 };
 
 module.exports = {
+    status: status,
+    timespan: timespan,
     add: add,
     all: all,
     count: count,
     reset: reset,
-    status: status,
     getStats: getStats
 };

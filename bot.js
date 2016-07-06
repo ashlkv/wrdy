@@ -152,7 +152,7 @@ const getBotMessage = function(userMessage) {
                     });
             // Negative answer: look at previous state to determine the question
             } else if (statsPattern.test(userMessageText)) {
-                promise = Score.getStats(chatId)
+                promise = Score.getStats(chatId, Score.timespan.week)
                     .then(function(message) {
                         return {message: message, state: states.stats};
                     });
@@ -244,10 +244,6 @@ const isTermCorrect = function(term, userMessageText) {
 
 const getUserName = function(userMessage) {
     return `${userMessage.chat.first_name || ''} ${userMessage.chat.last_name || ''}`;
-};
-
-const isAdmin = function(chatId) {
-    return process.env.ADMIN_USER_IDS && (process.env.ADMIN_USER_IDS.split(''))
 };
 
 const setWebhook = function() {
