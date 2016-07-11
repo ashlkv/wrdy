@@ -26,9 +26,9 @@ const skipPattern = /перевод|не знаю|дальше|не помню|^
 const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$/i;
 
 const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово\n/stats — статистика';
-const adminHelpText = '/nextvocab — показать слова для следующей недели\n51 cat кошка — исправить слово и перевод\n51 cat — исправить только слово\n51 кошка — исправить только перевод';
+const adminHelpText = '/vocab — показать слова для следующей недели\n51 cat кошка — исправить слово и перевод\n51 cat — исправить только слово\n51 кошка — исправить только перевод';
 
-const nextVocabPattern = /^\/nextvocab/i;
+const nextVocabPattern = /^\/vocab/i;
 const editWordPattern = /^\d{1,3}\.?\s?[a-zа-я]+/i;
 
 /**

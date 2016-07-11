@@ -283,6 +283,7 @@ const updateNextWords = function(text) {
                 let number = match[1] ? parseInt(match[1]) : null;
                 let term = match[2];
                 let translation = match[4];
+                // TODO Warn if words repeat / were used in previous cycles
                 if (_.isNumber(number) && number > 0) {
                     let word = nextWords[number - 1];
                     word.edited = true;
@@ -389,6 +390,8 @@ module.exports = {
     createRandomWord: createRandomWord,
     getWordsPortion: getWordsPortion,
     getRandomTerm: getRandomTerm,
+    fetchTerms: fetchTerms,
+    fetchWords: fetchWords,
     translate: translate,
     NoTermsException: NoTermsException,
     getNextWords: getNextWords,

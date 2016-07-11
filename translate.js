@@ -6,6 +6,7 @@ const debug = require('debug')('translate');
 const _ = require('lodash');
 
 const yandexTranslateUrl = 'https://translate.yandex.net/api/v1.5/tr.json/translate';
+const googleTranslateUrl = 'https://www.googleapis.com/language/translate/v2';
 
 /**
  * Translates terms with Google Translate service
@@ -13,8 +14,30 @@ const yandexTranslateUrl = 'https://translate.yandex.net/api/v1.5/tr.json/transl
  * @returns {Promise.<Array.<String>>} translations
  */
 const googleTranslate = function(words) {
-    // TODO Implement
-    return [];
+    let terms = _.map(words, 'term');
+    return request({
+        method: 'GET',
+        url: googleTranslateUrl,
+        qs: {
+            key: process.env.GOOGLE_TRANSLATE_API_KEY,
+            q: terms.join("\n"),
+            source: 'en',
+            target: 'ru',
+            format: 'text'
+        },
+        json: true
+    })
+    .then(function(response) {
+        debug('googleTranslate response', response);
+        if (response && response.data && response.data.translations && response.data.translations.length && response.data.translations[0].translatedText) {
+            return response.data.translations[0].translatedText.split("\n");
+        } else {
+            throw new Error('Failed to translate words: translation is empty.');
+        }
+    })
+    .catch(function() {
+        throw new Error('Failed to translate words: unexpected response.');
+    });
 };
 
 /**
