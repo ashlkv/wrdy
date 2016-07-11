@@ -3,6 +3,7 @@
 const Storage = require('./storage');
 const Score = require('./score');
 const User = require('./user');
+const Settings = require('./settings');
 const Wordnik = require('./wordnik');
 const Top15000 = require('./top15000');
 const Translate = require('./translate');
@@ -30,6 +31,8 @@ let currentTranslations;
 const lifetime = 'week';
 
 const lifetimeInMilliseconds = moment.duration(1, lifetime).asMilliseconds();
+
+const cycleStartedAtKey = 'cycleStartedAt';
 
 /**
  * Maximum number of words per iteration
@@ -363,9 +366,33 @@ const formatWords = function(words) {
     }).join("\n")
 };
 
+/**
+ * @returns {Promise.<Boolean>}
+ */
+const shouldStartCycle = function() {
+    // Monday, 10 am
+    let shouldStartAfterMoment = moment().startOf(lifetime).add(10, 'hours');
+    return Settings.getOne(cycleStartedAtKey)
+        .then(function(startedAtDate) {
+            let startedAtMoment = startedAtDate && moment(startedAtDate);
+            // Check if the last time the cycle was started is before the beginning of current cycle
+            let shouldStart = !startedAtMoment || startedAtMoment.isBefore(shouldStartAfterMoment);
+            debug(shouldStart ? 'should start a new cycle' : 'should not start a new cycle');
+            return shouldStart ? Promise.resolve() : Promise.reject();
+        });
+};
+
+/**
+ *
+ * @returns {Promise.<Array.<Word>>}
+ */
 const manageCycle = function() {
-    // Change status of current words to previous
-    return currentToPrevious()
+    return shouldStartCycle()
+        .then(function() {
+            debug('starting cycle');
+            // Change status of current words to previous
+            return currentToPrevious();
+        })
         .then(function() {
             return getNextWords();
         })
@@ -379,9 +406,15 @@ const manageCycle = function() {
         })
         .then(function() {
             return getNextWords();
+        })
+        .then(function(nextWords) {
+            // At this point everything is well: save last cycle time
+            return Promise.all([nextWords, Settings.set(cycleStartedAtKey, new Date())]);
+        })
+        .then(function(result) {
+            // Return next words
+            return result[0];
         });
-
-    // TODO Send a newly fetched vocab portion to admin (or do it elsewhere)
 };
 
 module.exports = {

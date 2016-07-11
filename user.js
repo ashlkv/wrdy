@@ -13,8 +13,7 @@ let adminIds;
  * @returns {Promise}
  */
 let getWordCount = function(chatId) {
-    return Settings
-        .getOne({key: 'wordCount', chatId: chatId});
+    return Settings.getOne({key: 'wordCount', chatId: chatId});
 };
 
 /**
@@ -24,8 +23,7 @@ let getWordCount = function(chatId) {
  * @returns {Promise}
  */
 let setWordCount = function(wordCount, chatId) {
-    return Settings
-        .set({key: 'wordCount', chatId: chatId}, wordCount);
+    return Settings.set({key: 'wordCount', chatId: chatId}, wordCount);
 };
 
 /**
@@ -34,14 +32,19 @@ let setWordCount = function(wordCount, chatId) {
  * @returns {Boolean}
  */
 const isAdmin = function(chatId) {
+    return getAdminIds().indexOf(chatId) !== -1;
+};
+
+const getAdminIds = function() {
     if (_.isUndefined(adminIds)) {
         adminIds = _.map((process.env.ADMIN_IDS || '').split(','), number => parseInt(number));
     }
-    return adminIds.indexOf(chatId) !== -1;
+    return adminIds;
 };
 
 module.exports = {
     getWordCount: getWordCount,
     setWordCount: setWordCount,
+    getAdminIds: getAdminIds,
     isAdmin: isAdmin
 };

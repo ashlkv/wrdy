@@ -43,11 +43,13 @@ let set = function(query, value) {
         .then(function(result) {
             let isUpdate = result && result.length;
             let settings = {};
-            if (_.isObject(value)) {
+            // Checking if value is an object. Additionally make sure this is not Date object.
+            if (_.isObject(value) && !(value instanceof Date)) {
                 settings = _.extend(settings, value);
             } else {
                 settings.value = value;
             }
+
             if (isUpdate) {
                 return Storage.update(collectionName, query, {$set: settings})
             } else {

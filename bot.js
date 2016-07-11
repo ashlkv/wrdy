@@ -28,6 +28,7 @@ const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хор�
 const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово\n/stats — статистика';
 const adminHelpText = '/vocab — показать слова для следующей недели\n51 cat кошка — исправить слово и перевод\n51 cat — исправить только слово\n51 кошка — исправить только перевод';
 
+const cyclePattern = /^\/cycle/i;
 const nextVocabPattern = /^\/vocab/i;
 const editWordPattern = /^\d{1,3}\.?\s?[a-zа-я]+/i;
 
@@ -68,29 +69,40 @@ const main = function() {
     bot.on('message', function(userMessage) {
         let chatId = userMessage.chat.id;
         let userName = getUserName(userMessage);
-        getBotMessage(userMessage)
-            .then(function(data) {
-                return Promise.all([data, bot.sendMessage(chatId, data.message, {parse_mode: 'HTML'})]);
-            })
-            .then(function(result) {
-                let data = result[0];
-                if (data) {
-                    History.save(data, chatId);
-                }
-                let botMessage = result[1];
 
-                let botMessageTextLog = botMessage.text.replace(/\n/g, ' ');
-                debug(`Chat ${chatId} ${userName}, tickets: ${botMessageTextLog}.`);
-            })
-            .catch(function(error) {
-                // No more words
-                if (error instanceof Vocab.NoTermsException) {
-                    return bot.sendMessage(chatId, 'Слова закончились.');
-                // All other errors
-                } else {
+        // Handle cycle command (admin only). Handled separately because it does not need to reply to a sender chat id, but instead send messages to all admin users.
+        if (cyclePattern.test(userMessage.text) && User.isAdmin(chatId)) {
+            cycle()
+                .catch(function(error) {
                     console.log(error && error.stack);
-                }
-            });
+                });
+        // Handle all other messages
+        } else {
+            getBotMessage(userMessage)
+                .then(function(data) {
+                    return Promise.all([data, bot.sendMessage(chatId, data.message, {parse_mode: 'HTML'})]);
+                })
+                .then(function(result) {
+                    let data = result[0];
+                    if (data) {
+                        History.save(data, chatId);
+                    }
+                    let botMessage = result[1];
+
+                    let botMessageTextLog = botMessage.text.replace(/\n/g, ' ');
+                    debug(`Chat ${chatId} ${userName}, tickets: ${botMessageTextLog}.`);
+                })
+                .catch(function(error) {
+                    // No more words
+                    if (error instanceof Vocab.NoTermsException) {
+                        return bot.sendMessage(chatId, 'Слова закончились.');
+                        // All other errors
+                    } else {
+                        console.log(error && error.stack);
+                    }
+                });
+        }
+
     });
 };
 
@@ -229,6 +241,27 @@ const getBotMessage = function(userMessage) {
                     });
             }
             return promise;
+        });
+};
+
+/**
+ * Handles vocabulary cycle: replaces current words with next words and sends a new portion of vocabulary to all admins fo review
+ * @returns {Promise}
+ */
+const cycle = function() {
+    // App is restarted about every 24 hours: use this restart to manage vocabulary cycle, if needed.
+    return Vocab.manageCycle()
+        // Send message to admins with a list of next week words to review and correct within this week.
+        .then(function(nextWords) {
+            let formatted = Vocab.formatWords(nextWords);
+            let message = `Привет. Вот слова на следующую неделю. Исправь, если нужно:\n${formatted}`;
+            let promises = [];
+            // Sending words for review to all admin users
+            _.forEach(User.getAdminIds(), function(adminId) {
+                promises.push(bot.sendMessage(adminId, message, {parse_mode: 'HTML'}));
+            });
+            // TODO Send stats message to all users
+            return Promise.all(promises);
         });
 };
 
