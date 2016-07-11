@@ -1,10 +1,10 @@
 "use strict";
 
 const Vocab = require('./vocab');
+const History = require('./history');
 const Score = require('./score');
 const User = require('./user');
 const Language = require('./language');
-const Dictionary = require('./dictionary');
 
 const TelegramBot = require('node-telegram-bot-api');
 const Promise = require('bluebird');
@@ -75,7 +75,7 @@ const main = function() {
             .then(function(result) {
                 let data = result[0];
                 if (data) {
-                    Vocab.saveHistory(data, chatId);
+                    History.save(data, chatId);
                 }
                 let botMessage = result[1];
 
@@ -103,27 +103,33 @@ const getBotMessage = function(userMessage) {
     let chatId = userMessage.chat.id;
     let userMessageText = _.trim(userMessage.text);
 
-    return Vocab.getHistory(chatId)
+    return History.get(chatId)
         .then(function(data) {
             let currentWord = data.word;
-            let term = currentWord && currentWord.getTerm();
             let translation = currentWord && currentWord.getTranslation();
+            return Promise.all([data, translation]);
+        })
+        .then(function(result) {
+            let data = result[0];
+            let currentWord = data.word;
+            let term = currentWord && currentWord.getTerm();
+            let translation = result[1];
             // A summary of user message recieved prior to current user message.
             let previousState = data.state;
             let promise;
 
             // Show next week vocabulary (admin only)
             if (nextVocabPattern.test(userMessageText) && User.isAdmin(chatId)) {
-                promise = Dictionary.getNextWords()
+                promise = Vocab.getNextWords()
                     .then(function(words) {
-                        let message = Dictionary.formatWords(words);
+                        let message = Vocab.formatWords(words);
                         return {message: message, state: states.nextVocabCommand};
                     });
             // Edit next week vocabulary (admin only)
             } else if (editWordPattern.test(userMessageText) && User.isAdmin(chatId)) {
-                promise = Dictionary.updateNextWords(userMessageText)
+                promise = Vocab.updateNextWords(userMessageText)
                     .then(function(editedWords) {
-                        let formatted = Dictionary.formatWords(editedWords);
+                        let formatted = Vocab.formatWords(editedWords);
                         return {message: `Ок, обновил:\n${formatted}`};
                     });
             // Asking for help
@@ -139,7 +145,7 @@ const getBotMessage = function(userMessage) {
                 number = number > Vocab.maxWordCount ? Vocab.maxWordCount : number;
                 promise = User.setValue('wordCount', number, chatId)
                     .then(function() {
-                        return Promise.all([Vocab.Word.createRandom(chatId), Score.count(chatId)]);
+                        return Promise.all([Vocab.createRandomWord(chatId), Score.count(chatId)]);
                     })
                     .then(function(result) {
                         let nextWord = result[0];
@@ -152,13 +158,13 @@ const getBotMessage = function(userMessage) {
                     });
             // Negative answer: look at previous state to determine the question
             } else if (statsPattern.test(userMessageText)) {
-                promise = Score.getStats(chatId, Score.timespan.week)
+                promise = Score.getStats(chatId, Vocab.lifetime)
                     .then(function(message) {
                         return {message: message, state: states.stats};
                     });
             // Word requested: show random word.
             } else if (anotherWordPattern.test(userMessageText) || yesPattern.test(userMessageText)) {
-                promise = Vocab.Word.createRandom(chatId)
+                promise = Vocab.createRandomWord(chatId)
                     .then(function(word) {
                         return {word: word, message: formatWord(word), state: states.next};
                     });
@@ -167,7 +173,7 @@ const getBotMessage = function(userMessage) {
                 // Wait for the score to save before proceeding
                 promise = Score.add(currentWord, Score.status.skipped, chatId)
                     .then(function() {
-                        return Vocab.Word.createRandom(chatId);
+                        return Vocab.createRandomWord(chatId);
                     })
                     .then(function(nextWord) {
                         let message = '';
@@ -184,7 +190,7 @@ const getBotMessage = function(userMessage) {
                 // Otherwise current word might be randomly chosen again, because it is not yet marked as correct.
                 promise = Score.add(currentWord, Score.status.correct, chatId)
                     .then(function() {
-                        return Vocab.Word.createRandom(chatId);
+                        return Vocab.createRandomWord(chatId);
                     })
                     .then(function(nextWord) {
                         let formatted = formatWord(nextWord);
@@ -199,7 +205,7 @@ const getBotMessage = function(userMessage) {
                         let nextWord = true;
                         // If this is the second mistake, show correct answer and a new word
                         if (previousState === states.wrongOnce) {
-                            nextWord = Vocab.Word.createRandom(chatId);
+                            nextWord = Vocab.createRandomWord(chatId);
                         }
                         return nextWord;
                     })
@@ -229,7 +235,7 @@ const getBotMessage = function(userMessage) {
 /**
  * Formats a word
  * @param {Word} word
- * @returns {String}
+ * @returns {Promise.<String>}
  */
 const formatWord = function(word) {
     let translation = word.getTranslation();

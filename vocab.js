@@ -3,19 +3,33 @@
 const Storage = require('./storage');
 const Score = require('./score');
 const User = require('./user');
+const Wordnik = require('./wordnik');
+const Top15000 = require('./top15000');
+const Translate = require('./translate');
+const Word = require('./word');
 
 const Promise = require('bluebird');
 const debug = require('debug')('vocab');
 const _ = require('lodash');
 const moment = require('moment');
 
-const collectionName = 'history';
+const collectionName = 'vocab';
+
+const wordStatus = {
+    current: 'current',
+    next: 'next',
+    previous: 'previous'
+};
+
+let currentTranslations;
 
 /**
- * Path to vocabulary file
+ * Lifetime of vocabulary cycle
  * @type {string}
  */
-const listFilePath = './data/vocabulary.json';
+const lifetime = 'week';
+
+const lifetimeInMilliseconds = moment.duration(1, lifetime).asMilliseconds();
 
 /**
  * Maximum number of words per iteration
@@ -23,86 +37,63 @@ const listFilePath = './data/vocabulary.json';
  */
 const maxWordCount = 100;
 
-let pairs;
+let nextWords;
+let currentWords;
 
-/**
- *
- * @param {String} [term] Vocabulary term. If not specified, creates a word with a random term
- * @constructor
- */
-let Word = function(term) {
-    this.term = term;
-};
+const NoTermsException = function() {};
 
 /**
  * Returns a new random word for given chat Id
  * @param {Number} chatId Requred so not repeat words correctly answered
  * @returns {Promise}
  */
-Word.createRandom = function(chatId) {
+const createRandomWord = function(chatId) {
     return getRandomTerm(chatId).then(function(term) {
-        return new Word(term);
-    });
+            return Promise.all([term, translate(term)]);
+        })
+        .then(function(result) {
+            let term = result[0];
+            let translation = result[1];
+            return new Word(term, translation);
+        });
 };
 
 /**
- * Translates the term
- * @returns {String}
- */
-Word.prototype.getTranslation = function() {
-    if (!this.translation) {
-        this.translation = translate(this.term);
-    }
-    return this.translation;
-};
-
-/**
- * Returns the term
- * @returns {String}
- */
-Word.prototype.getTerm = function() {
-    return this.term;
-};
-
-/**
- * Replaces all letters with dots except for one random letter
- * @returns {String}
- */
-Word.prototype.getClue = function() {
-    let randomIndex = _.random(0, this.term.length - 1);
-    let randomLetter = this.term[randomIndex];
-    let dots = this.term.replace(/[a-z]/gi, '–').split('');
-    dots[randomIndex] = randomLetter;
-    return dots.join(' ');
-};
-
-const NoTermsException = function() {};
-
-// TODO Store all word pairs in a database
-/**
- * Returns a custom portion of word pairs (e.g., first 50)
+ * Returns a custom portion of word translations (e.g., first 50)
  * @param {Number} chatId
  * @returns {Promise}
  */
-const getPairsPortion = function(chatId) {
-    // Return a portion of word pairs depending on custom word count
-    return User.getValue('wordCount', chatId)
-        .then(function(wordCount) {
-            let pairs = getAllPairs();
-            wordCount = wordCount || maxWordCount;
-            let keys = _.keys(pairs).slice(0, wordCount);
-            return _.pick(pairs, keys);
+const getWordsPortion = function(chatId) {
+    // Return a portion of word translations depending on custom word count
+    return Promise.all([User.getValue('wordCount', chatId), getCurrentTranslations()])
+        .then(function(result) {
+            let wordCount = result[0];
+            let translations = result[1];
+            let keys = _.keys(translations);
+            if (wordCount && wordCount < maxWordCount) {
+                keys = keys.slice(0, wordCount);
+            }
+            return _.pick(translations, keys);
         });
 };
 
 /**
  * Reads all words from file into an object where key is the English term and value is a corresponding term in another language
+ * @returns {Promise.<Object>}
  */
-const getAllPairs = function() {
-    if (!pairs) {
-        pairs = require(listFilePath);
+const getCurrentTranslations = function() {
+    if (!currentTranslations) {
+        return getCurrentWords()
+            .then(function(currentWords) {
+                currentTranslations = {};
+                _.each(currentWords, function(word) {
+                    currentTranslations[word.term] = word.translation;
+                });
+                return currentTranslations;
+            });
+    } else {
+        return Promise.resolve(currentTranslations);
     }
-    return pairs;
 };
 
 /**
@@ -111,7 +102,7 @@ const getAllPairs = function() {
  * @returns {String}
  */
 const getRandomTerm = function(chatId) {
-    return getPairsPortion(chatId)
+    return getWordsPortion(chatId)
         .then(function(pairs) {
             let allTerms = _.keys(pairs);
             return Promise.all([allTerms, Score.all(chatId)]);
@@ -149,53 +140,260 @@ const getRandomTerm = function(chatId) {
 /**
  * Translates term
  * @param {String} term
- * @returns {String}
+ * @returns {Promise.<String>}
  */
 const translate = function(term) {
-    return getAllPairs()[term];
-};
-
-/**
- * Stores last state, word, message and whatever for each chat
- * @param {Object} data
- * @param {Number} chatId
- * @returns {Promise}
- */
-const saveHistory = function(data, chatId) {
-    return Storage
-        .remove(collectionName, {chatId: chatId})
-        .then(function() {
-            return Storage.insert(collectionName, {
-                data: data,
-                date: moment().toDate(),
-                chatId: chatId
-            });
-        });
-};
-
-/**
- * Retrieves last state, word and message for each chat
- * @param {Number} chatId
- * @returns {Promise}
- */
-const getHistory = function(chatId) {
-    return Storage
-        .find(collectionName, {chatId: chatId})
-        .then(function(entries) {
-            let data = entries.length ? entries[0].data : {};
-            // Hydrating the word object
-            if (data.word && data.word.term) {
-                data.word = new Word(data.word.term);
+    return getCurrentTranslations()
+        .then(function(translations) {
+            let translation = translations[term];
+            if (translation) {
+                return translation;
+            // If translation is not found in current words, try all vocabulary
+            } else {
+                return Storage.find(collectionName, {term: term})
+                    .then(function(result) {
+                        return result.length ? result[0].translation : null;
+                    })
             }
-            return data;
         });
+};
+
+/**
+ * @typedef {Object} Word
+ * @property {string} term English term
+ * @property {string} translation Russian translation
+ */
+
+/**
+ * @returns {Promise.<Array.<Word>>}
+ */
+const fetchTerms = function() {
+    // TODO Wordnik returning words like wrist-drop, declawing and Pyhrric is a lot of fun, but better replace it with a different service.
+    if (process.env.TERMS_PROVIDER === 'wordnik') {
+        return Wordnik.fetchTerms(maxWordCount);
+    } else {
+        return getNextOrderNumber()
+            .then(function(number) {
+                // Fetching 100 terms starting from number of words already in dictionary to avoid duplicates
+                return Top15000.fetchTerms(maxWordCount, number);
+            });
+    }
+};
+
+/**
+ * Fetches words and translations from remote service.
+ * @returns {Promise.<Array.<Word>>}
+ */
+const fetchWords = function() {
+    return fetchTerms()
+        .then(function(words) {
+            return Promise.all([words, Translate.fetch(words)]);
+        })
+        .then(function(result) {
+            let words = result[0];
+            let translations = result[1];
+            let translatedWords = [];
+            // TODO Keep external word id (?)
+            _.forEach(words, function(word, i) {
+                translatedWords.push({
+                    term: word.term,
+                    translation: translations[i],
+                    number: i + 1
+                });
+            });
+            return translatedWords;
+        });
+};
+
+/**
+ * Returns the next order number, zero-based
+ * @returns {Promise.<Number>}
+ */
+const getNextOrderNumber = function() {
+    return Storage.count(collectionName);
+};
+
+/**
+ * Stores words in local storage with a status, if given.
+ * @param {Array.<Word>} words
+ * @param {String} status
+ * @returns {Promise.<Array.<Word>>}
+ */
+const saveWords = function(words, status) {
+    return getNextOrderNumber()
+        // Adding order number
+        .then(function(order) {
+            // Cloning the collection to avoid changing the source while preparing for storage
+            let wordsEntry = _.cloneDeep(words);
+            _.forEach(wordsEntry, function(word) {
+                if (status) {
+                    word.status = status;
+                }
+                delete word.edited;
+                delete word._id;
+                word.order = order;
+                order ++;
+            });
+            debug('wordsEntry', wordsEntry);
+            return Storage.insert(collectionName, wordsEntry);
+        });
+};
+
+/**
+ * Returns words and translations. Fetches if necessary.
+ * @returns {Promise.<Array.<Word>>}
+ */
+const getNextWords = function() {
+    // Check next words cache
+    if (!nextWords) {
+        return Storage.find(collectionName, {status: wordStatus.next}, 'order')
+            .then(function(words) {
+                if (!words.length) {
+                    return fetchWords()
+                        .then(function(words) {
+                            return Promise.all([words, saveWords(words, wordStatus.next)]);
+                        })
+                        .then(function(result) {
+                            return result[0];
+                        });
+                } else {
+                    return words;
+                }
+            })
+            .then(function(words) {
+                nextWords = words;
+                return words;
+            });
+    } else {
+        return Promise.resolve(nextWords);
+    }
+};
+
+/**
+ *
+ * @param {String} text User message text containing next words
+ */
+const updateNextWords = function(text) {
+    return getNextWords()
+        .then(function(nextWords) {
+            let lines = text.split("\n");
+            let editedWords = [];
+            _.forEach(lines, function(line) {
+                let match = line.match(/^(\d{1,3})\.?\s?([a-z]+)?([\s→]+)?([а-я]+)?/i);
+                let number = match[1] ? parseInt(match[1]) : null;
+                let term = match[2];
+                let translation = match[4];
+                if (_.isNumber(number) && number > 0) {
+                    let word = nextWords[number - 1];
+                    word.edited = true;
+                    if (term) {
+                        word.term = term;
+                    }
+                    if (translation) {
+                        word.translation = translation;
+                    }
+                    editedWords.push(word);
+                }
+            });
+
+            return Promise.all([nextWords, editedWords, Storage.remove(collectionName, {status: wordStatus.next})]);
+        })
+        .then(function(result) {
+            let nextWords = result[0];
+            let editedWords = result[1];
+            return Promise.all([editedWords, saveWords(nextWords, wordStatus.next)]);
+        })
+        .then(function(result) {
+            return result[0];
+        });
+};
+
+const resetNextWords = function() {
+    nextWords = null;
+    return Storage.remove(collectionName,  {status: wordStatus.next});
+};
+
+const resetCurrentWords = function() {
+    currentWords = null;
+    currentTranslations = null;
+    return Storage.remove(collectionName,  {status: wordStatus.current});
+};
+
+/**
+ * Returns current words and translations.
+ * @returns {Promise.<Array.<Word>>}
+ */
+const getCurrentWords = function() {
+    // Check current words cache
+    if (!currentWords) {
+        return Storage.find(collectionName, {status: wordStatus.current}, 'order')
+            .then(function(words) {
+                if (!words.length) {
+                    throw new Error('No words in dictionary for current timespan.');
+                }
+                currentWords = words;
+                return currentWords;
+            });
+    } else {
+        return Promise.resolve(currentWords);
+    }
+};
+
+const replaceCurrentWords = function(nextWords) {
+    return resetCurrentWords()
+        .then(function() {
+            return saveWords(nextWords, wordStatus.current);
+        })
+        .then(function() {
+            currentWords = nextWords;
+            return currentWords;
+        });
+};
+
+const currentToPrevious = function() {
+    return Storage.update(collectionName, {status: wordStatus.current}, {$set: {status: wordStatus.previous}});
+};
+
+const formatWords = function(words) {
+    return _.map(words, function(word, i) {
+        let number = !_.isUndefined(word.number) ? word.number : i + 1;
+        let line = `${number}. ${word.term} → ${word.translation}`;
+        return word.edited ? `<strong>${line}</strong>` : line;
+    }).join("\n")
+};
+
+const manageCycle = function() {
+    // Change status of current words to previous
+    return currentToPrevious()
+        .then(function() {
+            return getNextWords();
+        })
+        .then(function(nextWords) {
+            // Replace current words with next words
+            return replaceCurrentWords(nextWords);
+        })
+        .then(function() {
+            // Finally reset next words and then fetch a new portion of next words
+            return resetNextWords();
+        })
+        .then(function() {
+            return getNextWords();
+        });
+
+    // TODO Send a newly fetched vocab portion to admin (or do it elsewhere)
 };
 
 module.exports = {
+    lifetime: lifetime,
     maxWordCount: maxWordCount,
-    Word: Word,
+    createRandomWord: createRandomWord,
+    getWordsPortion: getWordsPortion,
     getRandomTerm: getRandomTerm,
-    saveHistory: saveHistory,
-    getHistory: getHistory,
-    NoTermsException: NoTermsException
+    translate: translate,
+    NoTermsException: NoTermsException,
+    getNextWords: getNextWords,
+    getCurrentWords: getCurrentWords,
+    updateNextWords: updateNextWords,
+    formatWords: formatWords,
+    manageCycle: manageCycle
 };

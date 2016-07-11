@@ -34,6 +34,12 @@ const insert = function(collectionName, items) {
     });
 };
 
+const update = function(collectionName, query, changes) {
+    return connect().then(function(db) {
+        return db.collection(collectionName).updateMany(query, changes);
+    });
+};
+
 /**
  *
  * @param {String} collectionName
@@ -86,6 +92,7 @@ const drop = function(collectionName) {
 module.exports = {
     connect: connect,
     insert: insert,
+    update: update,
     find: find,
     remove: remove,
     count: count,

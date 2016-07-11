@@ -20,11 +20,6 @@ const statusLocale = {
     skipped: 'Пропущено'
 };
 
-const timespan = {
-    week: 'week',
-    month: 'month'
-};
-
 /**
  * Stores the score entry
  * @param {Word} word
@@ -118,7 +113,6 @@ const getCountByStatus = function(score, status) {
 
 module.exports = {
     status: status,
-    timespan: timespan,
     add: add,
     all: all,
     count: count,
