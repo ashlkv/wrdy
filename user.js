@@ -34,20 +34,21 @@ let getValue = function(key, chatId) {
  */
 let setValue = function(key, value, chatId) {
     return Storage
-        // Get previous collector launch time
         .find(collectionName, {chatId: chatId})
         .then(function(result) {
-            let settings = result && result.length ? result[0] : {chatId: chatId};
+            let isUpdate = result && result.length;
+            let settings = {};
             if (_.isObject(key)) {
                 settings = _.extend(settings, key);
             } else {
                 settings[key] = value;
             }
-            return Storage
-                .remove(collectionName, {chatId: chatId})
-                .then(function() {
-                    Storage.insert(collectionName, settings);
-                });
+            if (isUpdate) {
+                return Storage.update(collectionName, {chatId: chatId}, {$set: settings})
+            } else {
+                settings.chatId = chatId;
+                return Storage.insert(collectionName, settings);
+            }
         });
 };
 
