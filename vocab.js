@@ -65,7 +65,7 @@ const createRandomWord = function(chatId) {
  */
 const getWordsPortion = function(chatId) {
     // Return a portion of word translations depending on custom word count
-    return Promise.all([User.getValue('wordCount', chatId), getCurrentTranslations()])
+    return Promise.all([User.getWordCount(chatId), getCurrentTranslations()])
         .then(function(result) {
             let wordCount = result[0];
             let translations = result[1];

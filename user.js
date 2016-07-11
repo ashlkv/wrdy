@@ -3,53 +3,29 @@
 const _ = require('lodash');
 const debug = require('debug')('user');
 
-const Storage = require('./storage');
-
-const collectionName = 'settings';
+const Settings = require('./settings');
 
 let adminIds;
 
 /**
  * Get settings value
- * @param {String} key
  * @param {Number} chatId
  * @returns {Promise}
  */
-let getValue = function(key, chatId) {
-    return Storage
-        // Get previous collector launch time
-        .find(collectionName, {chatId: chatId})
-        .then(function(result) {
-            let settings = result && result.length ? result[0] : {};
-            return settings[key];
-        });
+let getWordCount = function(chatId) {
+    return Settings
+        .getOne({key: 'wordCount', chatId: chatId});
 };
 
 /**
  * Set settings value
- * @param {String} key
- * @param {*} value
+ * @param {Number} wordCount
  * @param {Number} chatId
  * @returns {Promise}
  */
-let setValue = function(key, value, chatId) {
-    return Storage
-        .find(collectionName, {chatId: chatId})
-        .then(function(result) {
-            let isUpdate = result && result.length;
-            let settings = {};
-            if (_.isObject(key)) {
-                settings = _.extend(settings, key);
-            } else {
-                settings[key] = value;
-            }
-            if (isUpdate) {
-                return Storage.update(collectionName, {chatId: chatId}, {$set: settings})
-            } else {
-                settings.chatId = chatId;
-                return Storage.insert(collectionName, settings);
-            }
-        });
+let setWordCount = function(wordCount, chatId) {
+    return Settings
+        .set({key: 'wordCount', chatId: chatId}, wordCount);
 };
 
 /**
@@ -65,7 +41,7 @@ const isAdmin = function(chatId) {
 };
 
 module.exports = {
-    getValue: getValue,
-    setValue: setValue,
+    getWordCount: getWordCount,
+    setWordCount: setWordCount,
     isAdmin: isAdmin
 };

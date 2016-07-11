@@ -143,7 +143,7 @@ const getBotMessage = function(userMessage) {
                 let numberString = userMessageText.match(wordCountValuePattern)[1];
                 let number = Language.parseNumberString(numberString, Vocab.maxWordCount);
                 number = number > Vocab.maxWordCount ? Vocab.maxWordCount : number;
-                promise = User.setValue('wordCount', number, chatId)
+                promise = User.setWordCount(number, chatId)
                     .then(function() {
                         return Promise.all([Vocab.createRandomWord(chatId), Score.count(chatId)]);
                     })
