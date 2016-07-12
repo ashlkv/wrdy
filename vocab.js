@@ -201,7 +201,7 @@ const fetchWords = function() {
             _.forEach(words, function(word, i) {
                 translatedWords.push({
                     term: word.term,
-                    translation: translations[i],
+                    translation: word.translation || translations[i],
                     number: i + 1
                 });
             });
@@ -313,6 +313,10 @@ const updateNextWords = function(text) {
         });
 };
 
+const clear = function() {
+    return Storage.remove(collectionName);
+};
+
 const resetNextWords = function() {
     nextWords = null;
     return Storage.remove(collectionName,  {status: wordStatus.next});
@@ -368,11 +372,39 @@ const formatWords = function(words) {
 };
 
 /**
+ * @returns {Moment}
+ */
+const getCycleStartMoment = function() {
+    // Monday, 10 am
+    return moment().startOf(lifetime).add(10, 'hours');
+};
+
+/**
+ * Sets cycle start date
+ * @param {Date} date
+ * @returns {Promise}
+ */
+const setCycleStartedAt = function(date) {
+    return Settings.set(cycleStartedAtKey, date);
+};
+
+/**
+ * Resets both current and previous cycle start dates
+ * @returns {Promise}
+ */
+const resetCycleStartedAt = function() {
+    return Promise.all([
+        Settings.set(cycleStartedAtKey, null),
+        Settings.set(previousCycleStartedAtKey, null)
+    ]);
+};
+
+/**
  * @returns {Promise.<Boolean>}
  */
 const shouldStartCycle = function() {
     // Monday, 10 am
-    let shouldStartAfterMoment = moment().startOf(lifetime).add(10, 'hours');
+    let shouldStartAfterMoment = getCycleStartMoment();
     return Settings.getOne(cycleStartedAtKey)
         .then(function(startedAtDate) {
             let startedAtMoment = startedAtDate && moment(startedAtDate);
@@ -387,7 +419,7 @@ const shouldStartCycle = function() {
  *
  * @returns {Promise.<Array.<Word>>}
  */
-const manageCycle = function() {
+const cycle = function() {
     debug('starting cycle');
 
     // Change status of current words to previous
@@ -426,6 +458,7 @@ const manageCycle = function() {
 module.exports = {
     lifetime: lifetime,
     maxWordCount: maxWordCount,
+    clear: clear,
     createRandomWord: createRandomWord,
     getWordsPortion: getWordsPortion,
     getRandomTerm: getRandomTerm,
@@ -437,6 +470,9 @@ module.exports = {
     getCurrentWords: getCurrentWords,
     updateNextWords: updateNextWords,
     formatWords: formatWords,
+    getCycleStartMoment: getCycleStartMoment,
+    setCycleStartedAt: setCycleStartedAt,
+    resetCycleStartedAt: resetCycleStartedAt,
     shouldStartCycle: shouldStartCycle,
-    manageCycle: manageCycle
+    cycle: cycle
 };

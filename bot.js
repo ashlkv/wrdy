@@ -46,7 +46,8 @@ const states = {
     wordCountCommand: 'wordCountCommand',
     wordCountValue: 'wordCountValue',
     helpCommand: 'helpCommand',
-    nextVocabCommand: 'nextVocabCommand'
+    nextVocabCommand: 'nextVocabCommand',
+    unknown: 'unknown'
 };
 
 // Webhook for remote, polling for local
@@ -72,7 +73,7 @@ const main = function() {
 
         // Handle cycle command (admin only). Handled separately because it does not need to reply to a sender chat id, but instead send messages to all admin users.
         if (cyclePattern.test(userMessage.text) && User.isAdmin(chatId)) {
-            cycle()
+            handleCycle()
                 .catch(function(error) {
                     console.log(error && error.stack);
                 });
@@ -80,7 +81,12 @@ const main = function() {
         } else {
             getBotMessage(userMessage)
                 .then(function(data) {
-                    return Promise.all([data, bot.sendMessage(chatId, data.message, {parse_mode: 'HTML'})]);
+                    let options = _.extend({parse_mode: 'HTML'}, data.options);
+                    let promises = [data];
+                    if (data.message) {
+                        promises.push(bot.sendMessage(chatId, data.message, options));
+                    }
+                    return Promise.all(promises);
                 })
                 .then(function(result) {
                     let data = result[0];
@@ -89,7 +95,7 @@ const main = function() {
                     }
                     let botMessage = result[1];
 
-                    let botMessageTextLog = botMessage.text.replace(/\n/g, ' ');
+                    let botMessageTextLog = botMessage ? botMessage.text.replace(/\n/g, ' ') : null;
                     debug(`Chat ${chatId} ${userName}, tickets: ${botMessageTextLog}.`);
                 })
                 .catch(function(error) {
@@ -134,7 +140,8 @@ const getBotMessage = function(userMessage) {
             if (nextVocabPattern.test(userMessageText) && User.isAdmin(chatId)) {
                 promise = Vocab.getNextWords()
                     .then(function(words) {
-                        let message = Vocab.formatWords(words);
+                        let formatted = Vocab.formatWords(words);
+                        let message = `Слова на следующую неделю:\n${formatted}\n\nИсправить перевод: 10 кошка\nИли полностью: 10 cat кошка (можно сразу несколько строк)`;
                         return {message: message, state: states.nextVocabCommand};
                     });
             // Edit next week vocabulary (admin only)
@@ -150,7 +157,16 @@ const getBotMessage = function(userMessage) {
             // Starting the conversation or explicitly setting a word count
             } else if (startPattern.test(userMessageText) || wordCountCommandPattern.test(userMessageText)) {
                 let message = `Сколько слов в неделю хочешь учить? 20 / 50 / ${Vocab.maxWordCount}?`;
-                promise = {message: message, state: states.wordCountCommand};
+                let options = {
+                    reply_markup: JSON.stringify({
+                        keyboard: [
+                            ['10', '20', '50', '100']
+                        ],
+                        resize_keyboard: true,
+                        one_time_keyboard: true
+                    })
+                };
+                promise = {message: message, options: options, state: states.wordCountCommand};
             } else if (previousState === states.wordCountCommand && wordCountValuePattern.test(userMessageText)) {
                 let numberString = userMessageText.match(wordCountValuePattern)[1];
                 let number = Language.parseNumberString(numberString, Vocab.maxWordCount);
@@ -210,7 +226,7 @@ const getBotMessage = function(userMessage) {
                         return {word: nextWord, message: message, state: states.correct};
                     });
             // Answer is wrong
-            } else {
+            } else if (currentWord) {
                 // Wait for the score to save before proceeding
                 promise = Score.add(currentWord, Score.status.wrong, chatId)
                     .then(function() {
@@ -239,6 +255,8 @@ const getBotMessage = function(userMessage) {
                         }
                         return {word: word, message: message, state: state};
                     });
+            } else {
+                promise = {state: states.unknown};
             }
             return promise;
         });
@@ -248,11 +266,11 @@ const getBotMessage = function(userMessage) {
  * Handles vocabulary cycle: replaces current words with next words and sends a new portion of vocabulary to all admins fo review
  * @returns {Promise}
  */
-const cycle = function() {
+const handleCycle = function() {
     return Vocab.shouldStartCycle()
         .then(function(result) {
             if (result) {
-                return Vocab.manageCycle()
+                return Vocab.cycle()
                     // Send message to admins with a list of next week words to review and correct within this week.
                     .then(function(nextWords) {
                         let formatted = Vocab.formatWords(nextWords);
