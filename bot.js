@@ -249,19 +249,25 @@ const getBotMessage = function(userMessage) {
  * @returns {Promise}
  */
 const cycle = function() {
-    // App is restarted about every 24 hours: use this restart to manage vocabulary cycle, if needed.
-    return Vocab.manageCycle()
-        // Send message to admins with a list of next week words to review and correct within this week.
-        .then(function(nextWords) {
-            let formatted = Vocab.formatWords(nextWords);
-            let message = `Привет. Вот слова на следующую неделю. Исправь, если нужно:\n${formatted}`;
-            let promises = [];
-            // Sending words for review to all admin users
-            _.forEach(User.getAdminIds(), function(adminId) {
-                promises.push(bot.sendMessage(adminId, message, {parse_mode: 'HTML'}));
-            });
-            // TODO Send stats message to all users
-            return Promise.all(promises);
+    return Vocab.shouldStartCycle()
+        .then(function(result) {
+            if (result) {
+                return Vocab.manageCycle()
+                    // Send message to admins with a list of next week words to review and correct within this week.
+                    .then(function(nextWords) {
+                        let formatted = Vocab.formatWords(nextWords);
+                        let message = `Привет. Вот слова на следующую неделю. Исправь, если нужно:\n${formatted}`;
+                        let promises = [];
+                        // Sending words for review to all admin users
+                        _.forEach(User.getAdminIds(), function(adminId) {
+                            promises.push(bot.sendMessage(adminId, message, {parse_mode: 'HTML'}));
+                        });
+                        // TODO Send stats message to all users
+                        return Promise.all(promises);
+                    });
+            } else {
+                return true;
+            }
         });
 };
 

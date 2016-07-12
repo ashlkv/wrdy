@@ -33,6 +33,7 @@ const lifetime = 'week';
 const lifetimeInMilliseconds = moment.duration(1, lifetime).asMilliseconds();
 
 const cycleStartedAtKey = 'cycleStartedAt';
+const previousCycleStartedAtKey = 'previousCycleStartedAt';
 
 /**
  * Maximum number of words per iteration
@@ -378,7 +379,7 @@ const shouldStartCycle = function() {
             // Check if the last time the cycle was started is before the beginning of current cycle
             let shouldStart = !startedAtMoment || startedAtMoment.isBefore(shouldStartAfterMoment);
             debug(shouldStart ? 'should start a new cycle' : 'should not start a new cycle');
-            return shouldStart ? Promise.resolve() : Promise.reject();
+            return shouldStart;
         });
 };
 
@@ -387,12 +388,10 @@ const shouldStartCycle = function() {
  * @returns {Promise.<Array.<Word>>}
  */
 const manageCycle = function() {
-    return shouldStartCycle()
-        .then(function() {
-            debug('starting cycle');
-            // Change status of current words to previous
-            return currentToPrevious();
-        })
+    debug('starting cycle');
+
+    // Change status of current words to previous
+    return currentToPrevious()
         .then(function() {
             return getNextWords();
         })
@@ -405,11 +404,18 @@ const manageCycle = function() {
             return resetNextWords();
         })
         .then(function() {
-            return getNextWords();
+            return Promise.all([getNextWords(), Settings.getOne(cycleStartedAtKey)]);
         })
-        .then(function(nextWords) {
-            // At this point everything is well: save last cycle time
-            return Promise.all([nextWords, Settings.set(cycleStartedAtKey, new Date())]);
+        .then(function(result) {
+            let nextWords = result[0];
+            let previousCycleStartedAt = result[1];
+            let promises = [nextWords, Settings.set(cycleStartedAtKey, new Date())];
+            // Save previous cycle date, if any
+            if (previousCycleStartedAt) {
+                promises.push(Settings.set(previousCycleStartedAtKey, previousCycleStartedAt));
+            }
+            // At this point everything is well: save this cycle time and previous cycle time
+            return Promise.all(promises);
         })
         .then(function(result) {
             // Return next words
@@ -431,5 +437,6 @@ module.exports = {
     getCurrentWords: getCurrentWords,
     updateNextWords: updateNextWords,
     formatWords: formatWords,
+    shouldStartCycle: shouldStartCycle,
     manageCycle: manageCycle
 };
