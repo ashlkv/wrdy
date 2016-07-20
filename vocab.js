@@ -283,7 +283,7 @@ const updateNextWords = function(text) {
             let lines = text.split("\n");
             let editedWords = [];
             _.forEach(lines, function(line) {
-                let match = line.match(/^(\d{1,3})\.?\s?([a-z]+)?([\s→]+)?([а-я]+)?/i);
+                let match = line.match(/^(\d{1,3})\.?\s?([a-z]+)?([\s→]+)?([а-яё, \-]+)?/i);
                 let number = match[1] ? parseInt(match[1]) : null;
                 let term = match[2];
                 let translation = match[4];
