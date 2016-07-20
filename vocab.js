@@ -290,14 +290,17 @@ const updateNextWords = function(text) {
                 // TODO Warn if words repeat / were used in previous cycles
                 if (_.isNumber(number) && number > 0) {
                     let word = nextWords[number - 1];
-                    word.edited = true;
-                    if (term) {
-                        word.term = term;
+                    // If the word was actually changed (not just submitted)
+                    if (word.term !== term || word.translation !== translation) {
+                        word.edited = true;
+                        if (term) {
+                            word.term = term;
+                        }
+                        if (translation) {
+                            word.translation = translation;
+                        }
+                        editedWords.push(word);
                     }
-                    if (translation) {
-                        word.translation = translation;
-                    }
-                    editedWords.push(word);
                 }
             });
 

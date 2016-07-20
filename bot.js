@@ -149,7 +149,7 @@ const getBotMessage = function(userMessage) {
                 promise = Vocab.updateNextWords(userMessageText)
                     .then(function(editedWords) {
                         let formatted = Vocab.formatWords(editedWords);
-                        return {message: `Ок, обновил:\n${formatted}`};
+                        return {message: editedWords.length ? `Ок, обновил:\n${formatted}` : '(Ничего не изменилось)'};
                     });
             // Asking for help
             } else if (helpPattern.test(userMessageText)) {
