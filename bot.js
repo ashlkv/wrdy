@@ -23,9 +23,9 @@ const wordCountValuePattern = /^(\d+|десять|двадцать|пятьде�
 const wordCountCommandPattern = /^\/count$/i;
 const anotherWordPattern = /^слово$/i;
 const skipPattern = /перевод|не знаю|дальше|не помню|^ещ(е|ё)|^\?$/i;
-const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$/i;
+const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$|^yes$|^ok$/i;
 
-const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово\n/stats — статистика';
+const helpText = '«?» — показать перевод\n«слово» — новое слово\n/count — количество слов\n/stats — статистика';
 const adminHelpText = '/vocab — показать слова для следующей недели';
 
 const cyclePattern = /^\/cycle/i;
@@ -156,7 +156,7 @@ const getBotMessage = function(userMessage) {
                 analytics(userMessage, 'edit vocab');
             // Asking for help
             } else if (helpPattern.test(userMessageText)) {
-                promise = {message: helpText + (User.isAdmin(chatId) ? `\n${adminHelpText}` : ''), state: states.helpCommand};
+                promise = {message: getHelpText(chatId), state: states.helpCommand};
                 analytics(userMessage, '/help');
             // Starting the conversation or explicitly setting a word count
             } else if (startPattern.test(userMessageText) || wordCountCommandPattern.test(userMessageText)) {
@@ -195,7 +195,7 @@ const getBotMessage = function(userMessage) {
             } else if (statsPattern.test(userMessageText)) {
                 promise = Score.getStats(chatId, Vocab.lifetime)
                     .then(function(message) {
-                        message = message ? `Статистика за неделю:\n${message}` : 'Статистики пока нет';
+                        message = message ? `Статистика за неделю:\n${message}.\n\nПоехали дальше?` : 'Статистики пока нет.\nНачнём?';
                         return {message: message, state: states.stats};
                     });
                 analytics(userMessage, '/stats');
@@ -270,8 +270,10 @@ const getBotMessage = function(userMessage) {
                     });
                 analytics(userMessage, 'wrong');
             } else {
-                promise = {state: states.unknown};
-                analytics(userMessage, 'unclear');
+                // If bot encounters an unknown command two times in a row, show help
+                let secondTime = previousState === states.unknown;
+                promise = {state: states.unknown, message: secondTime ? getHelpText(chatId) : null};
+                analytics(userMessage, secondTime ? 'unclear, help shown' : 'unclear');
             }
             return promise;
         });
@@ -322,6 +324,10 @@ const isTermCorrect = function(term, userMessageText) {
 
 const getUserName = function(userMessage) {
     return `${userMessage.chat.first_name || ''} ${userMessage.chat.last_name || ''}`;
+};
+
+const getHelpText = function(chatId) {
+    return helpText + (User.isAdmin(chatId) ? `\n${adminHelpText}` : '');
 };
 
 const analytics = function(userMessage, event) {
