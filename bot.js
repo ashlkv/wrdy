@@ -195,7 +195,7 @@ const getBotMessage = function(userMessage) {
             } else if (statsPattern.test(userMessageText)) {
                 promise = Score.getStats(chatId, Vocab.lifetime)
                     .then(function(message) {
-                        message = message ? `Статистика за неделю:\n${message}.\n\nПоехали дальше?` : 'Статистики пока нет.\nНачнём?';
+                        message = message ? `Статистика за неделю:\n${message}\n\nПоехали дальше?` : 'Статистики пока нет.\nНачнём?';
                         return {message: message, state: states.stats};
                     });
                 analytics(userMessage, '/stats');
@@ -263,8 +263,9 @@ const getBotMessage = function(userMessage) {
                         // Retry
                         } else {
                             let formatted = currentWord.getClue();
-                            message = `Нет, неправильно.\nСделай ещё одну попытку:\n${formatted}`;
-                            state = previousState === states.wrongOnce ? states.wrongTwice : states.wrongOnce;
+                            let lastAttempt = previousState === states.wrongOnce;
+                            message = lastAttempt ? `Снова неправильно.\nПоследняя попытка:\n${formatted}` : `Нет, неправильно.\nСделай ещё одну попытку:\n${formatted}`;
+                            state = lastAttempt ? states.wrongTwice : states.wrongOnce;
                         }
                         return {word: word, message: message, state: state};
                     });
