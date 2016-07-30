@@ -43,6 +43,7 @@ const states = {
     correct: 'correct',
     wrongOnce: 'wrongOnce',
     wrongTwice: 'wrongTwice',
+    wrongThreeTimes: 'wrongThreeTimes',
     wordCountCommand: 'wordCountCommand',
     wordCountValue: 'wordCountValue',
     helpCommand: 'helpCommand',
@@ -232,27 +233,28 @@ const getBotMessage = function(userMessage) {
                 promise = Score.add(currentWord, Score.status.wrong, chatId)
                     .then(function() {
                         let nextWord = true;
-                        // If this is the second mistake, show correct answer and a new word
-                        if (previousState === states.wrongOnce) {
+                        // If this is the third mistake, show correct answer and a new word
+                        if (previousState === states.wrongTwice) {
                             nextWord = Vocab.createRandomWord(chatId);
                         }
                         return nextWord;
                     })
                     .then(function(nextWord) {
                         // TODO Handle the case when there is no current word / term
-                        // User has already been wrong once, this is the second failed attempt
                         let message;
                         let state;
                         let word = currentWord;
-                        if (previousState === states.wrongOnce) {
+                        // User has already been wrong twice, this is the third failed attempt
+                        if (previousState === states.wrongTwice) {
                             let formatted = formatWord(nextWord);
                             message = `${translation} → ${term}\n\nНовое слово:\n${formatted}`;
-                            state = states.wrongTwice;
+                            state = states.wrongThreeTimes;
                             word = nextWord;
+                        // Retry
                         } else {
                             let formatted = currentWord.getClue();
                             message = `Нет, неправильно.\nСделай ещё одну попытку:\n${formatted}`;
-                            state = states.wrongOnce;
+                            state = previousState === states.wrongOnce ? states.wrongTwice : states.wrongOnce;
                         }
                         return {word: word, message: message, state: state};
                     });
