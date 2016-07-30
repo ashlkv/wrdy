@@ -76,7 +76,14 @@ const main = function() {
         if (cyclePattern.test(userMessage.text) && User.isAdmin(chatId)) {
             handleCycle()
                 .catch(function(error) {
-                    console.log(error && error.stack);
+                    // Previous cycle not finished: do nothing
+                    if (error instanceof Vocab.PreviousCycleNotFinished) {
+                        debug('previous cycle not finished');
+                        return bot.sendMessage(chatId, 'С предыдущего обновления неделя ещё не прошла.');
+                        // All other errors
+                    } else {
+                        console.log(error && error.stack);
+                    }
                 });
         // Handle all other messages
         } else {
@@ -194,8 +201,9 @@ const getBotMessage = function(userMessage) {
             // Requesting stats
             } else if (statsPattern.test(userMessageText)) {
                 promise = Score.getStats(chatId, Vocab.lifetime)
-                    .then(function(message) {
-                        message = message ? `Статистика за неделю:\n${message}\n\nПоехали дальше?` : 'Статистики пока нет.\nНачнём?';
+                    .then(function(data) {
+                        let text = Score.formatStats(data.total);
+                        let message = text ? `Статистика за неделю:\n${text}\n\nПоехали дальше?` : 'Статистики пока нет.\nНачнём?';
                         return {message: message, state: states.stats};
                     });
                 analytics(userMessage, '/stats');
@@ -286,24 +294,40 @@ const getBotMessage = function(userMessage) {
  */
 const handleCycle = function() {
     return Vocab.shouldStartCycle()
-        .then(function(result) {
-            if (result) {
-                return Vocab.cycle()
-                    // Send message to admins with a list of next week words to review and correct within this week.
-                    .then(function(nextWords) {
-                        let formatted = Vocab.formatWords(nextWords);
-                        let message = `Привет. Вот слова на следующую неделю. Исправь, если нужно:\n${formatted}`;
-                        let promises = [];
-                        // Sending words for review to all admin users
-                        _.forEach(User.getAdminIds(), function(adminId) {
-                            promises.push(bot.sendMessage(adminId, message, {parse_mode: 'HTML'}));
-                        });
-                        // TODO Send stats message to all users
-                        return Promise.all(promises);
-                    });
-            } else {
-                return true;
-            }
+        .then(function() {
+            return Vocab.cycle();
+        })
+        .then(function(nextWords) {
+            // Send message to admins with a list of next week words to review and correct within this week.
+            let formatted = Vocab.formatWords(nextWords);
+            let message = `Привет. Вот слова на следующую неделю. Исправь, если нужно:\n${formatted}`;
+            let promises = [];
+            // Sending words for review to all admin users
+            _.forEach(User.getAdminIds(), function(adminId) {
+                promises.push(bot.sendMessage(adminId, message, {parse_mode: 'HTML'}));
+            });
+            return Promise.all(promises);
+        })
+        .then(function() {
+            // Send stats message to all users
+            return manageStats();
+        });
+};
+
+/**
+ * Sends stats to all useers who have scores in given timespan.
+ */
+const manageStats = function() {
+    return Score.getAllStats(Vocab.lifetime)
+        .then(function(allStats) {
+            let promises = [];
+            _.forEach(allStats, function(data) {
+                let text = Score.formatStats(data.total);
+                if (text) {
+                    promises.push(bot.sendMessage(data.chatId, `Статистика за неделю:\n${text}`, {parse_mode: 'HTML'}));
+                }
+            });
+            return Promise.all(promises);
         });
 };
 

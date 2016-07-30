@@ -83,6 +83,17 @@ const reset = function(chatId) {
 };
 
 /**
+ * Formats stats
+ * @param {Object} total
+ * @returns {string}
+ */
+const formatStats = function(total) {
+    return _.map(total, function(value, key) {
+        return `${statusLocale[key]}: ${value}`;
+    }).join('\n');
+};
+
+/**
  * Returns stats text
  * @param {Number} chatId
  * @param {String} [statsTimespan]
@@ -91,15 +102,34 @@ const reset = function(chatId) {
 const getStats = function(chatId, statsTimespan) {
     return all(chatId, statsTimespan)
         .then(function(score) {
-            let lines = [];
+            let total = {};
             _.forEach(_.keys(status), function(statusKey) {
                 let count = getCountByStatus(score, statusKey);
                 if (count) {
-                    lines.push(`${statusLocale[statusKey]}: ${count}`);
+                    total[statusKey] = count;
                 }
             });
-            return lines.length ? lines.join('\n') : null;
+            return {
+                chatId: chatId,
+                total: total
+            };
         });
+};
+
+/**
+ * Returns all stats in given timespan
+ * @param {String} [statsTimespan]
+ * @returns {Promise.<Array>}
+ */
+const getAllStats = function(statsTimespan) {
+    return getAllChatIds()
+        .then(function(chatIds) {
+            let promises = [];
+            _.forEach(chatIds, function(chatId) {
+                promises.push(getStats(chatId, statsTimespan));
+            });
+            return Promise.all(promises);
+        })
 };
 
 /**
@@ -111,11 +141,21 @@ const getCountByStatus = function(score, status) {
     return _.filter(score, {status: status}).length;
 };
 
+/**
+ * Returns ids of all users who have scores
+ * @returns {Promise.<Array>}
+ */
+const getAllChatIds = function() {
+    return Storage.distinct(collectionName, 'chatId');
+};
+
 module.exports = {
     status: status,
     add: add,
     all: all,
     count: count,
     reset: reset,
-    getStats: getStats
+    formatStats: formatStats,
+    getStats: getStats,
+    getAllStats: getAllStats
 };

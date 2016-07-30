@@ -78,6 +78,12 @@ const count = function(collectionName, query) {
     });
 };
 
+const distinct = function(collectionName, field) {
+    return connect().then(function(db) {
+        return db.collection(collectionName).distinct(field)
+    });
+};
+
 const drop = function(collectionName) {
     return connect()
         .then(function(db) {
@@ -96,5 +102,6 @@ module.exports = {
     find: find,
     remove: remove,
     count: count,
+    distinct: distinct,
     drop: drop
 };

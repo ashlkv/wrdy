@@ -45,6 +45,7 @@ let nextWords;
 let currentWords;
 
 const NoTermsException = function() {};
+const PreviousCycleNotFinished = function() {};
 
 /**
  * Returns a new random word for given chat Id
@@ -414,7 +415,10 @@ const shouldStartCycle = function() {
             // Check if the last time the cycle was started is before the beginning of current cycle
             let shouldStart = !startedAtMoment || startedAtMoment.isBefore(shouldStartAfterMoment);
             debug(shouldStart ? 'should start a new cycle' : 'should not start a new cycle');
-            return shouldStart;
+            if (!shouldStart) {
+                throw new PreviousCycleNotFinished();
+            }
+            return true;
         });
 };
 
@@ -469,6 +473,7 @@ module.exports = {
     fetchWords: fetchWords,
     translate: translate,
     NoTermsException: NoTermsException,
+    PreviousCycleNotFinished: PreviousCycleNotFinished,
     getNextWords: getNextWords,
     getCurrentWords: getCurrentWords,
     updateNextWords: updateNextWords,
