@@ -328,6 +328,9 @@ const manageStats = function() {
                 }
             });
             return Promise.all(promises);
+        })
+        .then(function() {
+            return Score.collapseStats(Vocab.lifetime);
         });
 };
 

@@ -6,7 +6,8 @@ const debug = require('debug')('score');
 const moment = require('moment');
 const _ = require('lodash');
 
-const collectionName = 'score';
+const scoreCollectionName = 'score';
+const collapsedStatsCollectionName = 'stats';
 
 const status = {
     correct: 'correct',
@@ -31,9 +32,9 @@ const add = function(word, status, chatId) {
     let term = word && word.getTerm();
     // Remove all previous score entries for this user / term. Store only one score record per user / term.
     return Storage
-        .remove(collectionName, {chatId: chatId, term: term})
+        .remove(scoreCollectionName, {chatId: chatId, term: term})
         .then(function() {
-            Storage.insert(collectionName, {
+            Storage.insert(scoreCollectionName, {
                 term: term,
                 translation: word && word.getTranslation(),
                 clue: word && word.getClue(),
@@ -57,7 +58,7 @@ const all = function(chatId, statsTimespan) {
             $gte: moment().startOf(statsTimespan).toDate()
         }
     }
-    return Storage.find(collectionName, query, 'date');
+    return Storage.find(scoreCollectionName, query, 'date');
 };
 
 /**
@@ -66,7 +67,7 @@ const all = function(chatId, statsTimespan) {
  * @returns {Promise}
  */
 const count = function(chatId) {
-    return Storage.count(collectionName, {
+    return Storage.count(scoreCollectionName, {
         chatId: chatId
     });
 };
@@ -77,7 +78,7 @@ const count = function(chatId) {
  * @returns {Promise}
  */
 const reset = function(chatId) {
-    return Storage.remove(collectionName, {
+    return Storage.remove(scoreCollectionName, {
         chatId: chatId
     });
 };
@@ -111,7 +112,9 @@ const getStats = function(chatId, statsTimespan) {
             });
             return {
                 chatId: chatId,
-                total: total
+                total: total,
+                date: moment().toDate(),
+                timespan: statsTimespan
             };
         });
 };
@@ -133,6 +136,21 @@ const getAllStats = function(statsTimespan) {
 };
 
 /**
+ * Collapses previous stats
+ * @param {String} [statsTimespan]
+ * @returns {Promise.<Array>}
+ */
+const collapseStats = function(statsTimespan) {
+    return getAllStats(statsTimespan)
+        .then(function(allStats) {
+            return Storage.insert(collapsedStatsCollectionName, allStats);
+        })
+        .then(function() {
+            return Storage.drop(scoreCollectionName);
+        });
+};
+
+/**
  * @param {Array} score
  * @param {String} status
  * @returns {Number} count
@@ -146,7 +164,7 @@ const getCountByStatus = function(score, status) {
  * @returns {Promise.<Array>}
  */
 const getAllChatIds = function() {
-    return Storage.distinct(collectionName, 'chatId');
+    return Storage.distinct(scoreCollectionName, 'chatId');
 };
 
 module.exports = {
@@ -157,5 +175,6 @@ module.exports = {
     reset: reset,
     formatStats: formatStats,
     getStats: getStats,
-    getAllStats: getAllStats
+    getAllStats: getAllStats,
+    collapseStats: collapseStats
 };
