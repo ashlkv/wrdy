@@ -26,7 +26,7 @@ const skipPattern = /перевод|не знаю|дальше|не помню|^
 const yesPattern = /^да$|^lf$|^ага$|^fuf$|^ок$|^jr$|^ладно$|^хорошо$|^давай$/i;
 
 const helpText = '/count — количество слов\n«?» — показать перевод\n«слово» — новое слово\n/stats — статистика';
-const adminHelpText = '/vocab — показать слова для следующей недели\n51 cat кошка — исправить слово и перевод\n51 cat — исправить только слово\n51 кошка — исправить только перевод';
+const adminHelpText = '/vocab — показать слова для следующей недели';
 
 const cyclePattern = /^\/cycle/i;
 const nextVocabPattern = /^\/vocab/i;
@@ -141,7 +141,7 @@ const getBotMessage = function(userMessage) {
                 promise = Vocab.getNextWords()
                     .then(function(words) {
                         let formatted = Vocab.formatWords(words);
-                        let message = `Слова на следующую неделю:\n${formatted}\n\nИсправить перевод: 10 кошка\nИли полностью: 10 cat кошка (можно сразу несколько строк)`;
+                        let message = `Слова на следующую неделю:\n${formatted}`;
                         return {message: message, state: states.nextVocabCommand};
                     });
             // Edit next week vocabulary (admin only)
@@ -188,6 +188,7 @@ const getBotMessage = function(userMessage) {
             } else if (statsPattern.test(userMessageText)) {
                 promise = Score.getStats(chatId, Vocab.lifetime)
                     .then(function(message) {
+                        message = message ? `Статистика за неделю:\n${message}` : 'Статистики пока нет';
                         return {message: message, state: states.stats};
                     });
             // Word requested: show random word.

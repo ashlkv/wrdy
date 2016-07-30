@@ -98,7 +98,7 @@ const getStats = function(chatId, statsTimespan) {
                     lines.push(`${statusLocale[statusKey]}: ${count}`);
                 }
             });
-            return lines.length ? lines.join('\n') : 'Статистики пока нет';
+            return lines.length ? lines.join('\n') : null;
         });
 };
 
