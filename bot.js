@@ -145,6 +145,7 @@ const getBotMessage = function(userMessage) {
                         let message = `Слова на следующую неделю:\n${formatted}`;
                         return {message: message, state: states.nextVocabCommand};
                     });
+                analytics(userMessage, '/vocab');
             // Edit next week vocabulary (admin only)
             } else if (editWordPattern.test(userMessageText) && User.isAdmin(chatId)) {
                 promise = Vocab.updateNextWords(userMessageText)
@@ -152,9 +153,11 @@ const getBotMessage = function(userMessage) {
                         let formatted = Vocab.formatWords(editedWords);
                         return {message: editedWords.length ? `Ок, обновил:\n${formatted}` : '(Ничего не изменилось)'};
                     });
+                analytics(userMessage, 'edit vocab');
             // Asking for help
             } else if (helpPattern.test(userMessageText)) {
                 promise = {message: helpText + (User.isAdmin(chatId) ? `\n${adminHelpText}` : ''), state: states.helpCommand};
+                analytics(userMessage, '/help');
             // Starting the conversation or explicitly setting a word count
             } else if (startPattern.test(userMessageText) || wordCountCommandPattern.test(userMessageText)) {
                 let message = `Сколько слов в неделю хочешь учить? 20 / 50 / ${Vocab.maxWordCount}?`;
@@ -168,6 +171,8 @@ const getBotMessage = function(userMessage) {
                     })
                 };
                 promise = {message: message, options: options, state: states.wordCountCommand};
+                analytics(userMessage, startPattern.test(userMessageText) ? '/start' : '/count');
+            // Word count value
             } else if (previousState === states.wordCountCommand && wordCountValuePattern.test(userMessageText)) {
                 let numberString = userMessageText.match(wordCountValuePattern)[1];
                 let number = Language.parseNumberString(numberString, Vocab.maxWordCount);
@@ -185,19 +190,22 @@ const getBotMessage = function(userMessage) {
                         let message = `Ок, ${number} ${numberCaption} в неделю.\n\n${newWordSentence}`;
                         return {word: nextWord, message: message, state: states.wordCountValue};
                     });
-            // Negative answer: look at previous state to determine the question
+                analytics(userMessage, 'set word count');
+            // Requesting stats
             } else if (statsPattern.test(userMessageText)) {
                 promise = Score.getStats(chatId, Vocab.lifetime)
                     .then(function(message) {
                         message = message ? `Статистика за неделю:\n${message}` : 'Статистики пока нет';
                         return {message: message, state: states.stats};
                     });
+                analytics(userMessage, '/stats');
             // Word requested: show random word.
             } else if (anotherWordPattern.test(userMessageText) || yesPattern.test(userMessageText)) {
                 promise = Vocab.createRandomWord(chatId)
                     .then(function(word) {
                         return {word: word, message: formatWord(word), state: states.next};
                     });
+                analytics(userMessage, 'new word');
             // Skipping the word
             } else if (skipPattern.test(userMessageText)) {
                 // Wait for the score to save before proceeding
@@ -214,6 +222,7 @@ const getBotMessage = function(userMessage) {
                         message += `Новое слово:\n${formatted}`;
                         return {word: nextWord, message: message, state: states.skip};
                     });
+                analytics(userMessage, 'skip');
             // Answer is correct
             } else if (isTermCorrect(term, userMessageText)) {
                 // Wait until the score is saved before choosing the next random word.
@@ -227,6 +236,7 @@ const getBotMessage = function(userMessage) {
                         let message = `👍\n\nНовое слово:\n${formatted}`;
                         return {word: nextWord, message: message, state: states.correct};
                     });
+                analytics(userMessage, 'correct');
             // Answer is wrong
             } else if (currentWord) {
                 // Wait for the score to save before proceeding
@@ -258,8 +268,10 @@ const getBotMessage = function(userMessage) {
                         }
                         return {word: word, message: message, state: state};
                     });
+                analytics(userMessage, 'wrong');
             } else {
                 promise = {state: states.unknown};
+                analytics(userMessage, 'unclear');
             }
             return promise;
         });
@@ -310,6 +322,10 @@ const isTermCorrect = function(term, userMessageText) {
 
 const getUserName = function(userMessage) {
     return `${userMessage.chat.first_name || ''} ${userMessage.chat.last_name || ''}`;
+};
+
+const analytics = function(userMessage, event) {
+    botan.track(userMessage, event);
 };
 
 const setWebhook = function() {
