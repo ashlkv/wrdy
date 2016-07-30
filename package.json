@@ -4,6 +4,10 @@
   "description": "A Telegram bot for memorizing English vocabulary",
   "main": "app.js",
   "private": "true",
+  "scripts": {
+    "start": "node app.js",
+    "populate": "node maintenance/populate.js"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ashyashy/wrdy.git"

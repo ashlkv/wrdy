@@ -24,6 +24,9 @@ Top15000.populate()
         let cycleStartMoment = Vocab.getCycleStartMoment();
         return Vocab.setCycleStartedAt(cycleStartMoment.toDate());
     })
+    .then(function() {
+        console.log('Done');
+    })
     .catch(function(error) {
         console.log(error && error.stack);
     });
