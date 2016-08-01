@@ -203,7 +203,7 @@ const getBotMessage = function(userMessage) {
                 promise = Score.getStats(chatId, Vocab.lifetime)
                     .then(function(data) {
                         let text = Score.formatStats(data.total);
-                        let message = text ? `Статистика за неделю:\n${text}\n\nПоехали дальше?` : 'Статистики пока нет.\nНачнём?';
+                        let message = text ? `Статистика за неделю:\n${text}\n\nПоехали дальше?` : 'На этой неделе мы не учили слов.\nНачнём?';
                         return {message: message, state: states.stats};
                     });
                 analytics(userMessage, '/stats');
